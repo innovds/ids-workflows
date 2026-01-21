@@ -19,6 +19,7 @@ NC='\033[0m'
 AWS_REGION="eu-west-1"
 AWS_ACCOUNT_ID="857736876208"
 SKIP_AWS=false
+AWS_ROLE_ARN=""
 
 print_header() { echo -e "\n${GREEN}=== $1 ===${NC}\n"; }
 print_warning() { echo -e "${YELLOW}⚠ $1${NC}"; }
@@ -32,15 +33,20 @@ show_help() {
     echo "Setup GitHub secrets for a microservice repository."
     echo ""
     echo "Required:"
-    echo "  --repo OWNER/REPO    Repository (e.g., ids-aws/iam-ms)"
+    echo "  --repo OWNER/REPO      Repository (e.g., ids-aws/iam-ms)"
     echo ""
     echo "Options:"
-    echo "  --skip-aws           Skip AWS OIDC setup"
-    echo "  --help               Show this help"
+    echo "  --aws-role-arn ARN     Use existing IAM role ARN (skip OIDC creation)"
+    echo "  --skip-aws             Skip AWS setup entirely"
+    echo "  --help                 Show this help"
     echo ""
     echo "Secrets configured:"
     echo "  - MAVEN_SETTINGS_XML : Base64 encoded ~/.m2/settings-github.xml (or settings.xml)"
     echo "  - AWS_ROLE_TO_ASSUME : AWS IAM Role ARN for OIDC"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --repo ids-aws/iam-ms --aws-role-arn arn:aws:iam::857736876208:role/github-actions-role"
+    echo "  $0 --repo ids-aws/iam-ms --skip-aws"
 }
 
 check_prerequisites() {
@@ -52,15 +58,17 @@ check_prerequisites() {
     fi
     print_success "gh CLI found"
 
-    if ! gh auth status &> /dev/null; then
+    # Check auth - works with both stored credentials and GITHUB_TOKEN
+    if ! gh api user &> /dev/null; then
         print_error "gh CLI not authenticated. Run: gh auth login"
         exit 1
     fi
     print_success "gh CLI authenticated"
 
-    if [ "$SKIP_AWS" = false ]; then
+    # AWS CLI only needed if creating OIDC/role (not if ARN provided)
+    if [ "$SKIP_AWS" = false ] && [ -z "$AWS_ROLE_ARN" ]; then
         if ! command -v aws &> /dev/null; then
-            print_warning "AWS CLI not found. Use --skip-aws to skip AWS setup."
+            print_warning "AWS CLI not found. Use --skip-aws or --aws-role-arn."
             SKIP_AWS=true
         else
             print_success "AWS CLI found"
@@ -130,7 +138,15 @@ setup_aws_oidc() {
     print_header "Setting up AWS OIDC"
 
     if [ "$SKIP_AWS" = true ]; then
-        print_warning "Skipping AWS OIDC setup"
+        print_warning "Skipping AWS setup"
+        return 0
+    fi
+
+    # If ARN provided, just set the secret
+    if [ -n "$AWS_ROLE_ARN" ]; then
+        echo "Using provided role ARN: $AWS_ROLE_ARN"
+        echo "$AWS_ROLE_ARN" | gh secret set AWS_ROLE_TO_ASSUME --repo "$REPO"
+        print_success "AWS_ROLE_TO_ASSUME configured"
         return 0
     fi
 
@@ -285,6 +301,10 @@ main() {
             --skip-aws)
                 SKIP_AWS=true
                 shift
+                ;;
+            --aws-role-arn)
+                AWS_ROLE_ARN="$2"
+                shift 2
                 ;;
             --help)
                 show_help
