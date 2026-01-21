@@ -34,7 +34,7 @@ on:
 
 jobs:
   test:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
       service-name: ${SERVICE_NAME}
       run-tests: true
@@ -51,7 +51,7 @@ on:
 
 jobs:
   pipeline:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
       service-name: ${SERVICE_NAME}
       run-tests: true
@@ -74,7 +74,7 @@ on:
 
 jobs:
   deploy:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
       service-name: ${SERVICE_NAME}
       run-tests: false
@@ -97,7 +97,7 @@ on:
 
 jobs:
   deploy:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
       service-name: ${SERVICE_NAME}
       run-tests: false
@@ -115,4 +115,4 @@ echo "  - build-deploy.yml (17 lines)"
 echo "  - deploy-stg.yml (19 lines)"
 echo "  - deploy-prod.yml (19 lines)"
 echo ""
-echo "Next: ./setup-secrets.sh --repo ids-aws/${SERVICE_NAME}"
+echo "Next: ./setup-secrets.sh --repo {{ORG_NAME}}/${SERVICE_NAME}"

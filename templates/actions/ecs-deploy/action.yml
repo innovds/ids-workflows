@@ -1,0 +1,81 @@
+name: 'ECS Deploy'
+description: 'Deploy to AWS ECS Fargate'
+
+inputs:
+  aws-role:
+    description: 'AWS IAM Role ARN for OIDC'
+    required: true
+  aws-region:
+    description: 'AWS Region'
+    required: false
+    default: '{{AWS_REGION}}'
+  cluster-name:
+    description: 'ECS Cluster name'
+    required: true
+  service-name:
+    description: 'ECS Service name'
+    required: true
+  task-family:
+    description: 'Task definition family'
+    required: true
+  container-name:
+    description: 'Container name in task definition'
+    required: true
+  image-uri:
+    description: 'Full image URI to deploy'
+    required: true
+  wait:
+    description: 'Wait for stability'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Get and update task definition
+      shell: bash
+      run: |
+        # Download current task definition
+        aws ecs describe-task-definition \
+          --task-definition "${{ inputs.task-family }}" \
+          --query 'taskDefinition' \
+          | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+          > task-def.json
+
+        # Update image
+        jq --arg IMG "${{ inputs.image-uri }}" \
+           --arg NAME "${{ inputs.container-name }}" \
+           '.containerDefinitions |= map(if .name == $NAME then .image = $IMG else . end)' \
+           task-def.json > new-task-def.json
+
+    - name: Register and deploy
+      shell: bash
+      run: |
+        # Register
+        TASK_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://new-task-def.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        # Update service
+        aws ecs update-service \
+          --cluster "${{ inputs.cluster-name }}" \
+          --service "${{ inputs.service-name }}" \
+          --task-definition "$TASK_ARN" \
+          --force-new-deployment > /dev/null
+
+        echo "Deployed $TASK_ARN"
+
+    - name: Wait for stability
+      if: inputs.wait == 'true'
+      shell: bash
+      run: |
+        aws ecs wait services-stable \
+          --cluster "${{ inputs.cluster-name }}" \
+          --services "${{ inputs.service-name }}"
+        echo "Service stable"

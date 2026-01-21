@@ -1,0 +1,31 @@
+name: Check Templates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Verify generated files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render templates
+        run: ./scripts/render.sh
+
+      - name: Check no diff
+        run: |
+          if ! git diff --exit-code; then
+            echo ""
+            echo "❌ Generated files are out of sync with templates!"
+            echo ""
+            echo "Files changed:"
+            git diff --name-only
+            echo ""
+            echo "Fix: run './scripts/render.sh' and commit the changes"
+            exit 1
+          fi
+          echo "✅ Generated files are in sync"

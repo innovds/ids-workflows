@@ -4,27 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-Reusable GitHub Actions workflows for IDS microservices CI/CD. See `README.md` for usage examples and architecture diagrams.
+Reusable GitHub Actions workflows for IDS microservices CI/CD. Multi-org support via templates.
 
 ## Key Design Decisions
 
-1. **Docker-only builds**: No Java/Maven on runners. All builds inside Dockerfile.
-2. **Build once, deploy everywhere**: Same image promoted via tag manipulation (no rebuild).
-3. **OIDC authentication**: No static AWS credentials.
-4. **Maven secrets via Docker**: Passed as `--secret id=maven_settings`.
+1. **Docker-only builds**: No Java/Maven on runners, all builds inside Dockerfile
+2. **Build once, deploy everywhere**: Same image promoted via tag manipulation
+3. **Registry-agnostic**: `docker-build-push` works with any registry (ECR, Docker Hub, GHCR, GCR)
+4. **OIDC authentication**: No static AWS credentials
+5. **Template-based config**: Placeholders `{{VAR}}` in `templates/`, rendered via `scripts/render.sh`
 
 ## Structure
 
-- `.github/workflows/` - Reusable workflows (`workflow_call`)
-- `actions/` - Composite actions (lower-level building blocks)
+```
+templates/              # Sources with {{placeholders}}
+├── .github/workflows/
+├── actions/
+└── scripts/
 
-## Testing Changes
+.github/workflows/      # Generated files
+actions/                # Generated files
+scripts/
+├── render.sh           # Generates from templates
+├── init-repo.sh        # Generated
+└── setup-secrets.sh    # Generated
 
-No runtime code to test. To validate:
-1. Reference `@<branch-name>` from a consumer repo
-2. Use `yamllint` for syntax validation
+config.example.sh       # Config template
+config.local.sh         # Local config (gitignored)
+```
 
-## Hardcoded Values
+## Development Workflow
 
-- AWS Region: `eu-west-1`
-- ECR Registry: `857736876208.dkr.ecr.eu-west-1.amazonaws.com`
+```bash
+# 1. Edit templates in templates/
+# 2. Render for target org
+./scripts/render.sh                    # Uses config.local.sh or config.example.sh
+./scripts/render.sh config.client.sh   # Uses specific config
+```
+
+## Placeholders
+
+| Placeholder | Example |
+|-------------|---------|
+| `{{ORG_NAME}}` | `ids-aws` |
+| `{{AWS_ACCOUNT_ID}}` | `857736876208` |
+| `{{AWS_REGION}}` | `eu-west-1` |
+| `{{ECR_REGISTRY}}` | `857736876208.dkr.ecr.eu-west-1.amazonaws.com` |
+
+## Actions
+
+| Action | Purpose | Registry-agnostic |
+|--------|---------|-------------------|
+| `docker-build-push` | Build & push | ✅ Yes |
+| `ecr-login` | AWS ECR login | ECR only |
+| `ecs-deploy` | ECS Fargate deploy | AWS only |
+| `docker-test` | Run tests | - |
+| `maven-settings` | Prepare settings.xml | - |

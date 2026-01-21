@@ -4,8 +4,8 @@
 # For GitHub Organization FREE
 #
 # Usage:
-#   ./setup-secrets.sh --repo ids-aws/iam-ms
-#   ./setup-secrets.sh --repo ids-aws/iam-ms --skip-aws
+#   ./setup-secrets.sh --repo {{ORG_NAME}}/iam-ms
+#   ./setup-secrets.sh --repo {{ORG_NAME}}/iam-ms --skip-aws
 #
 
 set -e
@@ -16,8 +16,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-AWS_REGION="eu-west-1"
-AWS_ACCOUNT_ID="857736876208"
+AWS_REGION="{{AWS_REGION}}"
+AWS_ACCOUNT_ID="{{AWS_ACCOUNT_ID}}"
 SKIP_AWS=false
 
 print_header() { echo -e "\n${GREEN}=== $1 ===${NC}\n"; }
@@ -32,7 +32,7 @@ show_help() {
     echo "Setup GitHub secrets for a microservice repository."
     echo ""
     echo "Required:"
-    echo "  --repo OWNER/REPO    Repository (e.g., ids-aws/iam-ms)"
+    echo "  --repo OWNER/REPO    Repository (e.g., {{ORG_NAME}}/iam-ms)"
     echo ""
     echo "Options:"
     echo "  --skip-aws           Skip AWS OIDC setup"
