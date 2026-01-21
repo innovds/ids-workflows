@@ -1,0 +1,142 @@
+name: Microservice Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: 'Service name (e.g., iam-ms)'
+        required: true
+        type: string
+      ecr-repository:
+        description: 'ECR repository (default: app/{service-name})'
+        required: false
+        type: string
+        default: ''
+      run-tests:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: true
+      build-push:
+        description: 'Build and push image'
+        required: false
+        type: boolean
+        default: false
+      deploy-env:
+        description: 'Environment to deploy (int, stg, prod, or empty)'
+        required: false
+        type: string
+        default: ''
+      image-tag:
+        description: 'Image tag for deployment (if not building)'
+        required: false
+        type: string
+        default: ''
+      cluster-prefix:
+        description: 'ECS cluster prefix'
+        required: false
+        type: string
+        default: 'ids-cluster'
+
+    secrets:
+      AWS_ROLE_TO_ASSUME:
+        required: false
+      MAVEN_SETTINGS_XML:
+        required: false
+
+    outputs:
+      image-tag:
+        description: 'Built image tag'
+        value: ${{ jobs.build.outputs.image-tag }}
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 857736876208.dkr.ecr.eu-west-1.amazonaws.com
+
+jobs:
+  test:
+    name: Tests
+    if: inputs.run-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Maven settings
+        uses: innovds/ids-workflows/actions/maven-settings@main
+        id: maven
+        with:
+          settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
+
+      - name: Run tests
+        uses: innovds/ids-workflows/actions/docker-test@main
+        with:
+          maven-settings-path: ${{ steps.maven.outputs.settings-path }}
+
+  build:
+    name: Build & Push
+    needs: [test]
+    if: always() && inputs.build-push && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.tag.outputs.value }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate tag
+        id: tag
+        run: |
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "value=sha-$SHA" >> $GITHUB_OUTPUT
+
+      - name: ECR repo
+        id: ecr
+        run: |
+          REPO="${{ inputs.ecr-repository }}"
+          [ -z "$REPO" ] && REPO="app/${{ inputs.service-name }}"
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+
+      - name: Maven settings
+        uses: innovds/ids-workflows/actions/maven-settings@main
+        id: maven
+        with:
+          settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
+
+      - name: Build & Push
+        uses: innovds/ids-workflows/actions/docker-build-push@main
+        with:
+          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ecr-repository: ${{ steps.ecr.outputs.repo }}
+          image-tag: ${{ steps.tag.outputs.value }}
+          extra-tags: ${{ inputs.deploy-env }}
+          maven-settings-path: ${{ steps.maven.outputs.settings-path }}
+
+  deploy:
+    name: Deploy ${{ inputs.deploy-env }}
+    needs: [build]
+    if: always() && inputs.deploy-env != '' && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deploy-env }}
+
+    steps:
+      - name: Resolve image
+        id: image
+        run: |
+          TAG="${{ needs.build.outputs.image-tag }}"
+          [ -z "$TAG" ] && TAG="${{ inputs.image-tag }}"
+          [ -z "$TAG" ] && echo "No image tag!" && exit 1
+
+          REPO="${{ inputs.ecr-repository }}"
+          [ -z "$REPO" ] && REPO="app/${{ inputs.service-name }}"
+
+          echo "uri=${{ env.ECR_REGISTRY }}/$REPO:$TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy
+        uses: innovds/ids-workflows/actions/ecs-deploy@main
+        with:
+          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          cluster-name: ${{ inputs.cluster-prefix }}-${{ inputs.deploy-env }}
+          service-name: ${{ inputs.service-name }}
+          task-family: ${{ inputs.service-name }}-${{ inputs.deploy-env }}
+          container-name: ${{ inputs.service-name }}
+          image-uri: ${{ steps.image.outputs.uri }}

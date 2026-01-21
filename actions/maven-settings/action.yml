@@ -1,0 +1,28 @@
+name: 'Prepare Maven Settings'
+description: 'Decode and prepare Maven settings.xml from base64 secret'
+
+inputs:
+  settings-base64:
+    description: 'Base64 encoded Maven settings.xml'
+    required: false
+    default: ''
+
+outputs:
+  settings-path:
+    description: 'Path to settings.xml file'
+    value: ${{ steps.prepare.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare settings
+      id: prepare
+      shell: bash
+      run: |
+        SETTINGS_PATH="${{ runner.temp }}/maven-settings.xml"
+        if [ -n "${{ inputs.settings-base64 }}" ]; then
+          echo "${{ inputs.settings-base64 }}" | base64 -d > "$SETTINGS_PATH"
+        else
+          touch "$SETTINGS_PATH"
+        fi
+        echo "path=$SETTINGS_PATH" >> $GITHUB_OUTPUT

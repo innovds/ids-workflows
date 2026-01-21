@@ -1,0 +1,89 @@
+name: 'Docker Build & Push ECR'
+description: 'Build Docker image and push to ECR'
+
+inputs:
+  aws-role:
+    description: 'AWS IAM Role ARN for OIDC'
+    required: true
+  aws-region:
+    description: 'AWS Region'
+    required: false
+    default: 'eu-west-1'
+  ecr-registry:
+    description: 'ECR Registry URL'
+    required: false
+    default: '857736876208.dkr.ecr.eu-west-1.amazonaws.com'
+  ecr-repository:
+    description: 'ECR repository name'
+    required: true
+  image-tag:
+    description: 'Image tag'
+    required: true
+  extra-tags:
+    description: 'Extra tags (newline separated)'
+    required: false
+    default: ''
+  dockerfile:
+    description: 'Dockerfile path'
+    required: false
+    default: 'Dockerfile'
+  target:
+    description: 'Docker build target'
+    required: false
+    default: 'final'
+  maven-settings-path:
+    description: 'Path to Maven settings.xml'
+    required: false
+    default: ''
+
+outputs:
+  image-uri:
+    description: 'Full image URI'
+    value: ${{ steps.build.outputs.uri }}
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: docker/setup-buildx-action@v3
+
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build tags
+      id: tags
+      shell: bash
+      run: |
+        BASE="${{ inputs.ecr-registry }}/${{ inputs.ecr-repository }}"
+        TAGS="${BASE}:${{ inputs.image-tag }}"
+        if [ -n "${{ inputs.extra-tags }}" ]; then
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && TAGS="${TAGS}
+        ${BASE}:${tag}"
+          done <<< "${{ inputs.extra-tags }}"
+        fi
+        echo "tags<<EOF" >> $GITHUB_OUTPUT
+        echo "$TAGS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Build and push
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ${{ inputs.dockerfile }}
+        target: ${{ inputs.target }}
+        push: true
+        tags: ${{ steps.tags.outputs.tags }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        secrets: |
+          maven_settings=${{ inputs.maven-settings-path }}
+
+    - name: Output URI
+      shell: bash
+      run: |
+        echo "uri=${{ inputs.ecr-registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
