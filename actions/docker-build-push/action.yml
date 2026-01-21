@@ -39,7 +39,7 @@ inputs:
 outputs:
   image-uri:
     description: 'Full image URI'
-    value: ${{ steps.build.outputs.uri }}
+    value: ${{ steps.output.outputs.uri }}
 
 runs:
   using: 'composite'
@@ -84,6 +84,7 @@ runs:
           maven_settings=${{ inputs.maven-settings-path }}
 
     - name: Output URI
+      id: output
       shell: bash
       run: |
         echo "uri=${{ inputs.ecr-registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}" >> $GITHUB_OUTPUT

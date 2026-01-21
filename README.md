@@ -7,193 +7,131 @@ Reusable GitHub Actions workflows for IDS microservices CI/CD.
 ```mermaid
 flowchart LR
     subgraph PR["Pull Request"]
-        CI[ci.yml<br/>tests]
+        CI[tests]
     end
 
     subgraph Main["Push to main"]
-        BUILD[build-push.yml]
+        BUILD[build + push ECR]
     end
 
     subgraph Environments
         INT[INT<br/>auto]
         STG[STG<br/>manual]
-        PROD[PROD<br/>manual + approval]
+        PROD[PROD<br/>manual]
     end
 
     PR --> Main
     BUILD --> INT
-    INT -->|promote.yml| STG
-    STG -->|promote.yml| PROD
-
-    INT & STG & PROD --- DEPLOY[deploy.yml]
+    INT --> STG
+    STG --> PROD
 ```
 
-> **Note**: `promote.yml` adds a new tag to the existing image without rebuilding.
+> **Principe**: Build once, deploy everywhere (même image promue entre envs, pas de rebuild)
 
-## Workflows
+## Quick Start
 
-| Workflow | Description | Trigger |
-|----------|-------------|---------|
-| `ci.yml` | Run tests via Docker | PR |
-| `build-push.yml` | Build & push to ECR | Push to main |
-| `deploy.yml` | Deploy to ECS Fargate | Manual / Auto |
-| `promote.yml` | Promote image between envs (no rebuild) | Manual |
+```bash
+# 1. Générer les workflows pour un MS
+./scripts/init-repo.sh /path/to/billing-ms billing-ms
 
-## Usage in Microservices
+# 2. Configurer les secrets
+./scripts/setup-secrets.sh --repo innovds/billing-ms
+```
 
-### 1. CI (Pull Request)
+## Workflows générés par MS (~68 lignes total)
+
+| Fichier | Lignes | Description |
+|---------|--------|-------------|
+| `ci.yml` | 13 | PR → Tests |
+| `build-deploy.yml` | 17 | Push main → Build → Deploy INT |
+| `deploy-stg.yml` | 19 | Manuel → Deploy STG |
+| `deploy-prod.yml` | 19 | Manuel → Deploy PROD |
+
+### Exemple: ci.yml (13 lignes)
 
 ```yaml
-# .github/workflows/ci.yml
 name: CI
-
 on:
   pull_request:
     branches: [main]
 
 jobs:
   test:
-    uses: innovds/ids-workflows/.github/workflows/ci.yml@main
+    uses: innovds/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    with:
+      service-name: iam-ms
+      run-tests: true
     secrets:
-      MAVEN_SETTINGS: ${{ secrets.MAVEN_SETTINGS }}
+      MAVEN_SETTINGS_XML: ${{ secrets.MAVEN_SETTINGS_XML }}
 ```
 
-### 2. Build & Deploy INT (Push to main)
+### Exemple: build-deploy.yml (17 lignes)
 
 ```yaml
-# .github/workflows/build-deploy.yml
 name: Build & Deploy INT
-
 on:
   push:
     branches: [main]
 
 jobs:
-  build:
-    uses: innovds/ids-workflows/.github/workflows/build-push.yml@main
+  pipeline:
+    uses: innovds/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
-      ecr-repository: app/iam-ms
-      environment-tag: int
-    secrets:
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      MAVEN_SETTINGS: ${{ secrets.MAVEN_SETTINGS }}
-
-  deploy-int:
-    needs: build
-    uses: innovds/ids-workflows/.github/workflows/deploy.yml@main
-    with:
-      environment: int
-      ecr-repository: app/iam-ms
-      image-tag: ${{ needs.build.outputs.image-tag }}
-      cluster-name: ids-cluster-int
       service-name: iam-ms
-      task-definition-family: iam-ms-int
-      container-name: iam-ms
+      run-tests: true
+      build-push: true
+      deploy-env: int
     secrets:
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      MAVEN_SETTINGS_XML: ${{ secrets.MAVEN_SETTINGS_XML }}
 ```
 
-### 3. Deploy STG (Manual)
+### Exemple: deploy-stg.yml / deploy-prod.yml (19 lignes)
 
 ```yaml
-# .github/workflows/deploy-stg.yml
 name: Deploy STG
-
 on:
   workflow_dispatch:
     inputs:
       image-tag:
-        description: 'Image tag to deploy (e.g., sha-abc1234)'
+        description: 'Image tag (e.g., sha-abc1234)'
         required: true
-        type: string
 
 jobs:
-  promote:
-    uses: innovds/ids-workflows/.github/workflows/promote.yml@main
-    with:
-      ecr-repository: app/iam-ms
-      source-tag: ${{ inputs.image-tag }}
-      target-tag: stg
-    secrets:
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-
   deploy:
-    needs: promote
-    uses: innovds/ids-workflows/.github/workflows/deploy.yml@main
+    uses: innovds/ids-workflows/.github/workflows/ms-pipeline.yml@main
     with:
-      environment: stg
-      ecr-repository: app/iam-ms
-      image-tag: ${{ inputs.image-tag }}
-      cluster-name: ids-cluster-stg
       service-name: iam-ms
-      task-definition-family: iam-ms-stg
-      container-name: iam-ms
+      run-tests: false
+      build-push: false
+      deploy-env: stg
+      image-tag: ${{ inputs.image-tag }}
     secrets:
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 ```
 
-### 4. Deploy PROD (Manual + Approval)
+## Configuration
 
-```yaml
-# .github/workflows/deploy-prod.yml
-name: Deploy PROD
+### GitHub Secrets (par repository)
 
-on:
-  workflow_dispatch:
-    inputs:
-      image-tag:
-        description: 'Image tag to deploy (e.g., sha-abc1234)'
-        required: true
-        type: string
-
-jobs:
-  promote:
-    uses: innovds/ids-workflows/.github/workflows/promote.yml@main
-    with:
-      ecr-repository: app/iam-ms
-      source-tag: ${{ inputs.image-tag }}
-      target-tag: prod
-    secrets:
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-
-  deploy:
-    needs: promote
-    uses: innovds/ids-workflows/.github/workflows/deploy.yml@main
-    with:
-      environment: prod  # Requires approval via GitHub Environment
-      ecr-repository: app/iam-ms
-      image-tag: ${{ inputs.image-tag }}
-      cluster-name: ids-cluster-prod
-      service-name: iam-ms
-      task-definition-family: iam-ms-prod
-      container-name: iam-ms
-    secrets:
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-```
-
-## Configuration Required
-
-### GitHub Organization Secrets
+> **GitHub Free** : pas de secrets d'organisation, chaque repo définit ses propres secrets.
 
 | Secret | Description |
 |--------|-------------|
-| `AWS_ROLE_TO_ASSUME` | AWS IAM Role ARN for OIDC authentication |
-| `MAVEN_SETTINGS` | Maven settings.xml content (if private repos) |
+| `MAVEN_SETTINGS_XML` | Maven settings.xml encodé en base64 |
+| `AWS_ROLE_TO_ASSUME` | ARN du rôle IAM pour OIDC |
 
-### GitHub Environments
+### Sécurité des déploiements (GitHub Free)
 
-Create these environments in each repository:
+GitHub Free ne supporte pas les environment protection rules pour les repos privés.
 
-| Environment | Protection Rules |
-|-------------|-----------------|
-| `int` | None (auto-deploy) |
-| `stg` | Optional: 1 reviewer |
-| `prod` | Required: 2+ reviewers |
+| Environnement | Protection |
+|---------------|------------|
+| **INT** | Auto-deploy sur push to main |
+| **STG** | `workflow_dispatch` = seuls les maintainers peuvent trigger |
+| **PROD** | `workflow_dispatch` + restriction possible via AWS IAM |
 
 ### AWS OIDC Setup
-
-1. Create OIDC Identity Provider in AWS IAM for GitHub Actions
-2. Create IAM Role with trust policy:
 
 ```json
 {
@@ -218,27 +156,26 @@ Create these environments in each repository:
 }
 ```
 
-3. Attach policies for ECR and ECS access
+## Structure du repo
 
-### Branch Protection (main)
+```
+ids-workflows/
+├── .github/workflows/
+│   └── ms-pipeline.yml      # Workflow unifié (appelé par tous les MS)
+├── actions/
+│   ├── maven-settings/      # Prépare settings.xml
+│   ├── docker-test/         # Tests via Docker
+│   ├── docker-build-push/   # Build + Push ECR
+│   └── ecs-deploy/          # Deploy Fargate
+├── scripts/
+│   ├── init-repo.sh         # Génère workflows pour un MS
+│   └── setup-secrets.sh     # Configure secrets GitHub + AWS OIDC
+└── README.md
+```
 
-- ✅ Require pull request before merging
-- ✅ Require status checks to pass: `test`
-- ✅ Require branches to be up to date
+## Principes
 
-## Composite Actions
-
-Available in `actions/` directory:
-
-| Action | Description |
-|--------|-------------|
-| `docker-build` | Build Docker image with BuildKit cache |
-| `ecr-push` | Login to ECR and push image |
-| `ecs-deploy` | Deploy to ECS Fargate |
-
-## Principles
-
-1. **Docker-only**: No Java/Maven setup on runners, everything via Dockerfile
-2. **Build once, deploy everywhere**: Same image promoted across environments
-3. **OIDC authentication**: No static AWS credentials
-4. **Environment gates**: Approvals required for production
+1. **Docker-only** : Pas de setup Java/Maven sur les runners, tout via Dockerfile
+2. **Build once, deploy everywhere** : Même image promue entre environnements
+3. **OIDC** : Pas de credentials AWS statiques
+4. **Factorisation** : Un seul workflow partagé (`ms-pipeline.yml`), ~68 lignes par MS

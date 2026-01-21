@@ -1,11 +1,7 @@
 #!/bin/bash
 #
 # Setup GitHub secrets for IDS microservices CI/CD
-# For GitHub Organization FREE (no shared org secrets)
-#
-# Prerequisites:
-#   - gh CLI installed and authenticated
-#   - AWS CLI configured (optional, for OIDC setup)
+# For GitHub Organization FREE
 #
 # Usage:
 #   ./setup-secrets.sh --repo innovds/iam-ms
@@ -14,14 +10,12 @@
 
 set -e
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Default values
 AWS_REGION="eu-west-1"
 AWS_ACCOUNT_ID="857736876208"
 SKIP_AWS=false
@@ -36,7 +30,6 @@ show_help() {
     echo "Usage: $0 --repo OWNER/REPO [OPTIONS]"
     echo ""
     echo "Setup GitHub secrets for a microservice repository."
-    echo "For GitHub Organization FREE (secrets must be set per repository)."
     echo ""
     echo "Required:"
     echo "  --repo OWNER/REPO    Repository (e.g., innovds/iam-ms)"
@@ -48,13 +41,8 @@ show_help() {
     echo "Secrets configured:"
     echo "  - MAVEN_SETTINGS_XML : Base64 encoded ~/.m2/settings.xml"
     echo "  - AWS_ROLE_TO_ASSUME : AWS IAM Role ARN for OIDC"
-    echo ""
-    echo "Example:"
-    echo "  $0 --repo innovds/iam-ms"
-    echo "  $0 --repo innovds/billing-ms --skip-aws"
 }
 
-# Check prerequisites
 check_prerequisites() {
     print_header "Checking prerequisites"
 
@@ -80,7 +68,6 @@ check_prerequisites() {
     fi
 }
 
-# Encode file to base64
 encode_base64() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         base64 -i "$1"
@@ -89,7 +76,6 @@ encode_base64() {
     fi
 }
 
-# Setup Maven settings secret
 setup_maven_settings() {
     print_header "Setting up Maven settings"
 
@@ -99,7 +85,6 @@ setup_maven_settings() {
         print_warning "Maven settings.xml not found at $MAVEN_SETTINGS_PATH"
         echo ""
         echo "Create a settings.xml with your repository credentials:"
-        echo ""
         cat << 'EOF'
 <settings>
   <servers>
@@ -122,7 +107,6 @@ EOF
 
     print_success "Found settings.xml at $MAVEN_SETTINGS_PATH"
 
-    # Encode to base64
     MAVEN_SETTINGS_B64=$(encode_base64 "$MAVEN_SETTINGS_PATH")
 
     echo "Setting MAVEN_SETTINGS_XML for repo: $REPO"
@@ -131,7 +115,6 @@ EOF
     print_success "MAVEN_SETTINGS_XML secret configured"
 }
 
-# Setup AWS OIDC Role
 setup_aws_oidc() {
     print_header "Setting up AWS OIDC"
 
@@ -144,7 +127,6 @@ setup_aws_oidc() {
     OIDC_PROVIDER="token.actions.githubusercontent.com"
     ORG=$(echo "$REPO" | cut -d'/' -f1)
 
-    # Check if OIDC provider exists
     print_info "Checking OIDC provider..."
     if ! aws iam get-open-id-connect-provider \
         --open-id-connect-provider-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_PROVIDER}" \
@@ -165,12 +147,10 @@ setup_aws_oidc() {
         print_success "OIDC provider already exists"
     fi
 
-    # Check if role exists
     print_info "Checking IAM role..."
     if ! aws iam get-role --role-name "$ROLE_NAME" &> /dev/null; then
         echo "Creating IAM role: $ROLE_NAME"
 
-        # Create trust policy
         TRUST_POLICY=$(cat <<EOF
 {
   "Version": "2012-10-17",
@@ -202,7 +182,6 @@ EOF
 
         print_success "IAM role created"
 
-        # Attach ECR policy
         echo "Attaching ECR policy..."
         ECR_POLICY=$(cat <<EOF
 {
@@ -236,7 +215,6 @@ EOF
             --policy-name "ecr-access" \
             --policy-document "$ECR_POLICY"
 
-        # Attach ECS policy
         echo "Attaching ECS policy..."
         ECS_POLICY=$(cat <<EOF
 {
@@ -277,50 +255,9 @@ EOF
     echo "Setting AWS_ROLE_TO_ASSUME for repo: $REPO"
     echo "$ROLE_ARN" | gh secret set AWS_ROLE_TO_ASSUME --repo "$REPO"
 
-    print_success "AWS_ROLE_TO_ASSUME secret configured: $ROLE_ARN"
+    print_success "AWS_ROLE_TO_ASSUME: $ROLE_ARN"
 }
 
-# Setup GitHub environments
-setup_environments() {
-    print_header "Setting up GitHub Environments"
-
-    for env in int stg prod; do
-        echo "Creating environment: $env"
-
-        gh api --method PUT "repos/${REPO}/environments/${env}" \
-            2>/dev/null || print_warning "Could not create environment '$env'"
-    done
-
-    print_success "Environments created (int, stg, prod)"
-    print_warning "Add required reviewers for 'prod' manually: https://github.com/${REPO}/settings/environments"
-}
-
-# Setup branch protection
-setup_branch_protection() {
-    print_header "Setting up Branch Protection"
-
-    echo "Configuring branch protection for 'main'..."
-
-    gh api --method PUT "repos/${REPO}/branches/main/protection" \
-        --input - << 'EOF' 2>/dev/null || print_warning "Could not set branch protection (may need admin access)"
-{
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["test"]
-  },
-  "enforce_admins": false,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
-    "dismiss_stale_reviews": true
-  },
-  "restrictions": null
-}
-EOF
-
-    print_success "Branch protection configured"
-}
-
-# Main
 main() {
     echo -e "${GREEN}"
     echo "╔═══════════════════════════════════════════════╗"
@@ -328,7 +265,6 @@ main() {
     echo "╚═══════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --repo)
@@ -358,13 +294,10 @@ main() {
     fi
 
     echo "Repository: $REPO"
-    echo ""
 
     check_prerequisites
     setup_maven_settings
     setup_aws_oidc
-    setup_environments
-    setup_branch_protection
 
     print_header "Setup Complete!"
 
@@ -374,15 +307,9 @@ main() {
         echo "  ✓ AWS_ROLE_TO_ASSUME"
     fi
     echo ""
-    echo "Environments created:"
-    echo "  ✓ int (auto-deploy)"
-    echo "  ✓ stg (manual)"
-    echo "  ✓ prod (manual + approval needed)"
-    echo ""
     echo "Next steps:"
-    echo "  1. Add required reviewers for 'prod': https://github.com/${REPO}/settings/environments"
-    echo "  2. Verify secrets: https://github.com/${REPO}/settings/secrets/actions"
-    echo "  3. Create a PR to test CI workflow"
+    echo "  1. Verify secrets: https://github.com/${REPO}/settings/secrets/actions"
+    echo "  2. Create a PR to test CI workflow"
 }
 
 main "$@"
