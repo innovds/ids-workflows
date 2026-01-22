@@ -63,7 +63,26 @@ flowchart LR
     MAN_TESTS -.-> MAN_BUILD -.-> MAN_DEPLOY
 ```
 
-> **Principe**: Build once, deploy everywhere (même image promue entre envs)
+> **Principe**: Build once, deploy everywhere (même image promue entre envs via `sha-{commit}`)
+>
+> **Image tags**: Chaque build push `sha-{commit}` (immutable) + `latest` (toujours à jour)
+
+---
+
+## Consumer Repo Example (iam-ms)
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `ci.yml` | PR → main | Tests + build validation |
+| `release.yml` | Tag `releases/v*` | Tests → Build → Push → Deploy INT |
+| `build-deploy.yml` | 🔘 Manual | Build et/ou deploy vers int/stg/prod |
+
+**Promotion workflow** :
+1. Tag `releases/v1.0.0` → build `sha-abc1234` + `latest`, deploy INT
+2. Valider en INT
+3. Actions → `Build & Deploy` → `stg`, décocher `build-image`, tag = `sha-abc1234`
+4. Valider en STG
+5. Répéter pour `prod` avec le même tag
 
 ---
 
@@ -137,7 +156,7 @@ jobs:
 |-------|------|----------|---------|-------------|
 | `service-name` | string | ✅ | - | Nom du service |
 | `ecr-repository` | string | ❌ | `app/{service-name}` | Repository ECR |
-| `aws-account-id` | string | ❌ | Config org | ID compte AWS |
+| `aws-account-id` | string | ❌ | `857736876208` | ID compte AWS |
 | `aws-region` | string | ❌ | `eu-west-1` | Région AWS |
 | `run-tests` | boolean | ❌ | `false` | Exécuter les tests |
 | `build-push` | boolean | ❌ | `false` | Build et push image |
@@ -376,21 +395,22 @@ vim config.local.sh  # Adapter les valeurs
 ```
 ids-workflows/
 ├── .github/workflows/
-│   ├── ms-ci.yml           # CI réutilisable
-│   └── ms-pipeline.yml     # Pipeline complet
+│   ├── ms-ci.yml            # Workflow réutilisable CI
+│   ├── ms-pipeline.yml      # Workflow réutilisable pipeline complet
+│   └── check-templates.yml  # CI interne (sync templates)
 ├── actions/
-│   ├── docker-build/       # Build Docker unifié
-│   ├── ecr-login/          # Login ECR OIDC
-│   ├── ecs-deploy/         # Deploy ECS Fargate
-│   └── maven-settings/     # Prépare Maven
-├── templates/              # Sources {{placeholders}}
+│   ├── docker-build/        # Build Docker unifié
+│   ├── ecr-login/           # Login ECR OIDC
+│   ├── ecs-deploy/          # Deploy ECS Fargate
+│   └── maven-settings/      # Prépare Maven
+├── templates/               # Sources avec {{placeholders}}
 ├── scripts/
-│   ├── render.sh           # Génère depuis templates
-│   ├── init-repo.sh        # Init workflows MS
-│   ├── setup-secrets.sh    # Configure secrets
-│   └── protect-branch.sh   # Protection branche
+│   ├── render.sh            # Génère depuis templates
+│   ├── init-repo.sh         # Init workflows pour MS
+│   ├── setup-secrets.sh     # Configure secrets GitHub
+│   └── protect-branch.sh    # Protection branche main
 └── docs/
-    └── aws-oidc-setup.md   # Guide OIDC AWS
+    └── aws-oidc-setup.md    # Guide config OIDC AWS
 ```
 
 ---
