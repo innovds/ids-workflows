@@ -73,9 +73,9 @@ flowchart LR
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `ci.yml` | PR → main | Tests uniquement |
+| `ci.yml` | PR → main | Tests uniquement (via ms-pipeline) |
+| `build-deploy.yml` | Push → main | Tests → Build → Push → Deploy INT |
 | `release.yml` | Tag `releases/v*` | Tests → Build → Push → Deploy INT |
-| `build-deploy.yml` | 🔘 Manual | Build et/ou deploy vers int/stg/prod |
 
 **Promotion workflow** :
 1. Tag `releases/v1.0.0` → build `sha-abc1234` + `latest`, deploy INT
