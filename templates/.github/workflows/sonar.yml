@@ -1,0 +1,25 @@
+# SonarQube Analysis - triggered on push/merge to main
+# Copy this file to your microservice repo: .github/workflows/sonar.yml
+
+name: SonarQube
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  sonar:
+    # Run on push to main OR when PR is merged (not just closed)
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    uses: ids-aws/ids-workflows/.github/workflows/sonar.yml@main
+    with:
+      project-key: __SERVICE_NAME__  # Replace with your service name
+      # Optional overrides:
+      # project-name: 'My Service Display Name'
+      # sources: 'src/main/java'
+      # exclusions: '**/test/**,**/target/**'
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

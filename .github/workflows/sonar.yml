@@ -1,0 +1,87 @@
+name: SonarQube Analysis
+
+on:
+  workflow_call:
+    inputs:
+      project-key:
+        description: 'SonarQube project key'
+        required: true
+        type: string
+      project-name:
+        description: 'SonarQube project name (default: project-key)'
+        required: false
+        type: string
+        default: ''
+      sonar-host-url:
+        description: 'SonarQube server URL'
+        required: false
+        type: string
+        default: 'http://ec2-34-249-62-250.eu-west-1.compute.amazonaws.com:9000'
+      java-version:
+        description: 'Java version for analysis'
+        required: false
+        type: string
+        default: '21'
+      sources:
+        description: 'Source directories (comma-separated)'
+        required: false
+        type: string
+        default: 'src/main/java'
+      exclusions:
+        description: 'Files to exclude from analysis'
+        required: false
+        type: string
+        default: '**/test/**,**/target/**'
+
+    secrets:
+      SONAR_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  sonar:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ inputs.java-version }}
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Resolve project name
+        id: project
+        run: |
+          NAME="${{ inputs.project-name }}"
+          [ -z "$NAME" ] && NAME="${{ inputs.project-key }}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ inputs.project-key }}
+            -Dsonar.projectName=${{ steps.project.outputs.name }}
+            -Dsonar.sources=${{ inputs.sources }}
+            -Dsonar.exclusions=${{ inputs.exclusions }}
+            -Dsonar.java.binaries=target/classes
+            -Dsonar.sourceEncoding=UTF-8
