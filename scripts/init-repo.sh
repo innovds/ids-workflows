@@ -98,8 +98,6 @@ on:
 jobs:
   sonar:
     uses: ids-aws/ids-workflows/.github/workflows/sonar.yml@main
-    with:
-      project-key: ${SERVICE_NAME}
     secrets:
       SONAR_TOKEN: \${{ secrets.SONAR_TOKEN }}
       MAVEN_SETTINGS_XML: \${{ secrets.MAVEN_SETTINGS_XML }}

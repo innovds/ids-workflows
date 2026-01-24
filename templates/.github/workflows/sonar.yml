@@ -4,9 +4,10 @@ on:
   workflow_call:
     inputs:
       project-key:
-        description: 'SonarQube project key'
-        required: true
+        description: 'SonarQube project key (default: repo name)'
+        required: false
         type: string
+        default: ''
       project-name:
         description: 'SonarQube project name (default: project-key)'
         required: false
@@ -68,11 +69,15 @@ jobs:
       - name: Build
         run: ./mvnw compile -DskipTests --settings ${{ steps.maven.outputs.settings-path }}
 
-      - name: Resolve project name
+      - name: Resolve project
         id: project
         run: |
+          KEY="${{ inputs.project-key }}"
+          [ -z "$KEY" ] && KEY="${{ github.event.repository.name }}"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
           NAME="${{ inputs.project-name }}"
-          [ -z "$NAME" ] && NAME="${{ inputs.project-key }}"
+          [ -z "$NAME" ] && NAME="$KEY"
           echo "name=$NAME" >> $GITHUB_OUTPUT
 
       - name: SonarQube Scan
@@ -82,7 +87,7 @@ jobs:
           SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
         with:
           args: >
-            -Dsonar.projectKey=${{ inputs.project-key }}
+            -Dsonar.projectKey=${{ steps.project.outputs.key }}
             -Dsonar.projectName=${{ steps.project.outputs.name }}
             -Dsonar.sources=${{ inputs.sources }}
             -Dsonar.exclusions=${{ inputs.exclusions }}
