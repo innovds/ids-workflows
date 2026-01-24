@@ -87,12 +87,13 @@ jobs:
       MAVEN_SETTINGS_XML: \${{ secrets.MAVEN_SETTINGS_XML }}
 EOF
 
-# SonarQube (on push to main)
+# SonarQube (on push to main + manual)
 cat > "$REPO_PATH/.github/workflows/sonar.yml" << EOF
 name: SonarQube
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   sonar:
