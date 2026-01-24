@@ -80,8 +80,8 @@ permissions:
 
 jobs:
   build:
-    name: Build & Push
-    if: inputs.build-push
+    name: Build
+    if: inputs.run-tests || inputs.build-push
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.tag.outputs.value }}
@@ -89,31 +89,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate tag
-        id: tag
-        run: |
-          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "value=sha-$SHA" >> $GITHUB_OUTPUT
-
-      - name: ECR repo
-        id: ecr
-        run: |
-          REPO="${{ inputs.ecr-repository }}"
-          [ -z "$REPO" ] && REPO="app/${{ inputs.service-name }}"
-          echo "repo=$REPO" >> $GITHUB_OUTPUT
-          echo "registry=${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com" >> $GITHUB_OUTPUT
-
       - name: Maven settings
         uses: {{ORG_NAME}}/ids-workflows/actions/maven-settings@main
         id: maven
         with:
           settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
-
-      - name: Login to ECR
-        uses: {{ORG_NAME}}/ids-workflows/actions/ecr-login@main
-        with:
-          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ inputs.aws-region }}
 
       - name: Run tests
         if: inputs.run-tests
@@ -123,7 +103,31 @@ jobs:
           push: 'false'
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
 
+      - name: Generate tag
+        if: inputs.build-push
+        id: tag
+        run: |
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "value=sha-$SHA" >> $GITHUB_OUTPUT
+
+      - name: ECR repo
+        if: inputs.build-push
+        id: ecr
+        run: |
+          REPO="${{ inputs.ecr-repository }}"
+          [ -z "$REPO" ] && REPO="app/${{ inputs.service-name }}"
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          echo "registry=${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com" >> $GITHUB_OUTPUT
+
+      - name: Login to ECR
+        if: inputs.build-push
+        uses: {{ORG_NAME}}/ids-workflows/actions/ecr-login@main
+        with:
+          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.aws-region }}
+
       - name: Build & Push
+        if: inputs.build-push
         uses: {{ORG_NAME}}/ids-workflows/actions/docker-build@main
         with:
           target: final
