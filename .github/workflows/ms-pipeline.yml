@@ -79,28 +79,6 @@ permissions:
   contents: read
 
 jobs:
-  # Tests only (when not building)
-  test:
-    name: Tests
-    if: inputs.run-tests && !inputs.build-push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Maven settings
-        uses: ids-aws/ids-workflows/actions/maven-settings@main
-        id: maven
-        with:
-          settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
-
-      - name: Run tests
-        uses: ids-aws/ids-workflows/actions/docker-build@main
-        with:
-          target: test
-          push: 'false'
-          maven-settings-path: ${{ steps.maven.outputs.settings-path }}
-
-  # Build & Push (includes tests if requested - same runner = shared cache)
   build:
     name: Build & Push
     if: inputs.build-push
