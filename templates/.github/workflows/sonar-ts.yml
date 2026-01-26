@@ -1,0 +1,134 @@
+name: SonarQube Analysis (TypeScript)
+
+on:
+  workflow_call:
+    inputs:
+      project-key:
+        description: 'SonarQube project key (default: repo name)'
+        required: false
+        type: string
+        default: ''
+      project-name:
+        description: 'SonarQube project name (default: project-key)'
+        required: false
+        type: string
+        default: ''
+      sonar-host-url:
+        description: 'SonarQube server URL'
+        required: false
+        type: string
+        default: '{{SONAR_HOST_URL}}'
+      node-version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '22'
+      sources:
+        description: 'Source directories'
+        required: false
+        type: string
+        default: 'src'
+      tests:
+        description: 'Test source directories'
+        required: false
+        type: string
+        default: 'src/__tests__'
+      exclusions:
+        description: 'Files to exclude from analysis'
+        required: false
+        type: string
+        default: '**/node_modules/**,**/dist/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx'
+      test-inclusions:
+        description: 'Test files pattern'
+        required: false
+        type: string
+        default: '**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx'
+      coverage-path:
+        description: 'Path to coverage report'
+        required: false
+        type: string
+        default: 'coverage/lcov.info'
+      skip-tests:
+        description: 'Skip tests (no coverage)'
+        required: false
+        type: boolean
+        default: false
+      package-manager:
+        description: 'Package manager (npm, pnpm, yarn)'
+        required: false
+        type: string
+        default: 'pnpm'
+
+    secrets:
+      SONAR_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+
+      - name: Install dependencies
+        run: |
+          case "${{ inputs.package-manager }}" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            yarn) yarn install --frozen-lockfile ;;
+            npm) npm ci ;;
+          esac
+
+      - name: Run tests with coverage
+        if: ${{ !inputs.skip-tests }}
+        run: |
+          case "${{ inputs.package-manager }}" in
+            pnpm) pnpm test:ci ;;
+            yarn) yarn test:ci ;;
+            npm) npm run test:ci ;;
+          esac
+
+      - name: Resolve project
+        id: project
+        run: |
+          KEY="${{ inputs.project-key }}"
+          [ -z "$KEY" ] && KEY="${{ github.event.repository.name }}"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+          NAME="${{ inputs.project-name }}"
+          [ -z "$NAME" ] && NAME="$KEY"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ inputs.sonar-host-url }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ steps.project.outputs.key }}
+            -Dsonar.projectName=${{ steps.project.outputs.name }}
+            -Dsonar.sources=${{ inputs.sources }}
+            -Dsonar.tests=${{ inputs.tests }}
+            -Dsonar.exclusions=${{ inputs.exclusions }}
+            -Dsonar.test.inclusions=${{ inputs.test-inclusions }}
+            -Dsonar.javascript.lcov.reportPaths=${{ inputs.coverage-path }}
+            -Dsonar.sourceEncoding=UTF-8
