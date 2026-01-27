@@ -130,11 +130,13 @@ jobs:
           SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           PREFIX="${{ inputs.image-tag-prefix }}"
           if [ -n "$PREFIX" ]; then
+            # With prefix: {prefix}-sha-xxx, latest, {prefix}
             echo "value=${PREFIX}-sha-$SHA" >> $GITHUB_OUTPUT
-            echo "latest=${PREFIX}-latest" >> $GITHUB_OUTPUT
+            echo "extra=latest,${PREFIX}" >> $GITHUB_OUTPUT
           else
+            # Without prefix: sha-xxx, latest
             echo "value=sha-$SHA" >> $GITHUB_OUTPUT
-            echo "latest=latest" >> $GITHUB_OUTPUT
+            echo "extra=latest" >> $GITHUB_OUTPUT
           fi
 
       - name: ECR repo
@@ -162,7 +164,7 @@ jobs:
           registry: ${{ steps.ecr.outputs.registry }}
           repository: ${{ steps.ecr.outputs.repo }}
           image-tag: ${{ steps.tag.outputs.value }}
-          extra-tags: ${{ steps.tag.outputs.latest }}
+          extra-tags: ${{ steps.tag.outputs.extra }}
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
           build-args: ${{ inputs.build-args }}
 
@@ -191,7 +193,12 @@ jobs:
             PREFIX="${{ inputs.image-tag-prefix }}"
             BASE_TAG="${{ inputs.image-tag }}"
             if [ -n "$PREFIX" ]; then
-              TAG="${PREFIX}-${BASE_TAG}"
+              # With prefix: "latest" -> just prefix, otherwise prefix-tag
+              if [ "$BASE_TAG" = "latest" ]; then
+                TAG="$PREFIX"
+              else
+                TAG="${PREFIX}-${BASE_TAG}"
+              fi
             else
               TAG="$BASE_TAG"
             fi
