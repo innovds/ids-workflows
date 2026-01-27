@@ -68,6 +68,11 @@ on:
         required: false
         type: string
         default: ''
+      image-tag-prefix:
+        description: 'Prefix for image tags (e.g., env name: int, stg, prod)'
+        required: false
+        type: string
+        default: ''
 
     secrets:
       AWS_ROLE_TO_ASSUME:
@@ -123,7 +128,14 @@ jobs:
         id: tag
         run: |
           SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "value=sha-$SHA" >> $GITHUB_OUTPUT
+          PREFIX="${{ inputs.image-tag-prefix }}"
+          if [ -n "$PREFIX" ]; then
+            echo "value=${PREFIX}-sha-$SHA" >> $GITHUB_OUTPUT
+            echo "latest=${PREFIX}-latest" >> $GITHUB_OUTPUT
+          else
+            echo "value=sha-$SHA" >> $GITHUB_OUTPUT
+            echo "latest=latest" >> $GITHUB_OUTPUT
+          fi
 
       - name: ECR repo
         if: inputs.build-push
@@ -150,7 +162,7 @@ jobs:
           registry: ${{ steps.ecr.outputs.registry }}
           repository: ${{ steps.ecr.outputs.repo }}
           image-tag: ${{ steps.tag.outputs.value }}
-          extra-tags: latest
+          extra-tags: ${{ steps.tag.outputs.latest }}
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
           build-args: ${{ inputs.build-args }}
 
@@ -174,7 +186,16 @@ jobs:
         id: image
         run: |
           TAG="${{ needs.build.outputs.image-tag }}"
-          [ -z "$TAG" ] && TAG="${{ inputs.image-tag }}"
+          if [ -z "$TAG" ]; then
+            # No build output, use input with optional prefix
+            PREFIX="${{ inputs.image-tag-prefix }}"
+            BASE_TAG="${{ inputs.image-tag }}"
+            if [ -n "$PREFIX" ]; then
+              TAG="${PREFIX}-${BASE_TAG}"
+            else
+              TAG="$BASE_TAG"
+            fi
+          fi
 
           REPO="${{ inputs.ecr-repository }}"
           [ -z "$REPO" ] && REPO="app/${{ steps.service.outputs.name }}"
