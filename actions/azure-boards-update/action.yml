@@ -65,8 +65,7 @@ runs:
         fi
 
         # Parse AB#<id> from title and body
-        TEXT="${{ inputs.pr-title }} ${{ inputs.pr-body }}"
-        IDS=$(echo "$TEXT" | grep -oE 'AB#[0-9]+' | grep -oE '[0-9]+' | sort -u)
+        IDS=$(printf '%s\n%s' "${{ inputs.pr-title }}" "${{ inputs.pr-body }}" | grep -oE 'AB#[0-9]+' | grep -oE '[0-9]+' | sort -u)
 
         if [ -z "$IDS" ]; then
           echo "No AB# references found in PR"
@@ -78,27 +77,24 @@ runs:
         echo "Found work items: $IDS"
         echo "Target state: $STATE"
 
-        PAT_B64=$(echo -n ":${{ inputs.azure-pat }}" | base64)
         ORG="${{ inputs.azure-org }}"
         PROJECT="${{ inputs.azure-project }}"
         UPDATED=""
 
         for ID in $IDS; do
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH \
-            -H "Authorization: Basic $PAT_B64" \
+          HTTP_CODE=$(curl -s -o /tmp/ab_response.json -w "%{http_code}" \
+            -u ":${{ inputs.azure-pat }}" \
+            -X PATCH \
             -H "Content-Type: application/json-patch+json" \
             "https://dev.azure.com/$ORG/$PROJECT/_apis/wit/workitems/$ID?api-version=7.1" \
             -d "[{\"op\":\"replace\",\"path\":\"/fields/System.State\",\"value\":\"$STATE\"}]")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
 
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✓ AB#$ID → $STATE"
             [ -n "$UPDATED" ] && UPDATED="$UPDATED,$ID" || UPDATED="$ID"
           else
             echo "✗ AB#$ID failed ($HTTP_CODE)"
-            echo "$BODY" | head -3
+            cat /tmp/ab_response.json | head -3
           fi
         done
 
