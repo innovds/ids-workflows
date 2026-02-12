@@ -104,10 +104,7 @@ runs:
           fi
 
           # Update image in .env for compose.yml interpolation (persists across restarts)
-          if [ ! -f .env ]; then
-            echo "::error::.env not found in $DEPLOY_DIR - run initial setup (Ansible) first"
-            exit 1
-          fi
+          touch .env
           if grep -q "^${{ inputs.image-env-var }}=" .env; then
             sed -i "s|^${{ inputs.image-env-var }}=.*|${{ inputs.image-env-var }}=${{ inputs.image-uri }}|" .env
           else
