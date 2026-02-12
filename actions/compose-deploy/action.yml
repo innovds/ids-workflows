@@ -1,0 +1,136 @@
+name: 'Compose Deploy'
+description: 'Deploy to VM via SSH and Docker Compose'
+
+inputs:
+  ssh-host:
+    description: 'VM hostname or IP'
+    required: true
+  ssh-user:
+    description: 'SSH user'
+    required: false
+    default: 'ec2-user'
+  ssh-key:
+    description: 'SSH private key content'
+    required: true
+  service-name:
+    description: 'Service name (used for deploy directory)'
+    required: true
+  image-uri:
+    description: 'Full image URI (registry/repo:tag)'
+    required: true
+  compose-file:
+    description: 'Path to compose.yml in repo'
+    required: false
+    default: 'compose.yml'
+  deploy-path:
+    description: 'Base deploy path on VM'
+    required: false
+    default: '/opt/ids/deploy'
+  aws-region:
+    description: 'AWS region for ECR login on VM'
+    required: false
+    default: ''
+  wait:
+    description: 'Wait for service to become healthy'
+    required: false
+    default: 'true'
+  timeout:
+    description: 'Health check timeout in seconds'
+    required: false
+    default: '300'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.compose-file }}" ]; then
+          echo "::error::Compose file not found: ${{ inputs.compose-file }}"
+          exit 1
+        fi
+
+    - name: Setup SSH
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh-key }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts 2>/dev/null
+
+    - name: Prepare remote directory
+      shell: bash
+      run: |
+        SSH_CMD="ssh -i ~/.ssh/deploy_key ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}"
+        DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
+
+        $SSH_CMD "mkdir -p $DEPLOY_DIR && \
+          [ -f $DEPLOY_DIR/.env.deploy ] && cp $DEPLOY_DIR/.env.deploy $DEPLOY_DIR/.env.deploy.bak || true"
+
+    - name: Transfer compose file
+      shell: bash
+      run: |
+        scp -i ~/.ssh/deploy_key \
+          ${{ inputs.compose-file }} \
+          ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}:${{ inputs.deploy-path }}/${{ inputs.service-name }}/compose.yml
+
+    - name: Deploy
+      shell: bash
+      run: |
+        SSH_CMD="ssh -i ~/.ssh/deploy_key ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}"
+        DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
+        REGISTRY=$(echo "${{ inputs.image-uri }}" | cut -d'/' -f1)
+
+        $SSH_CMD bash <<REMOTE_SCRIPT
+          set -euo pipefail
+          cd $DEPLOY_DIR
+
+          # ECR login (assumes IAM instance profile on VM)
+          aws ecr get-login-password --region ${{ inputs.aws-region }} | \
+            docker login --username AWS --password-stdin $REGISTRY
+
+          # Write deployment env
+          cat > .env.deploy <<EOF
+        IMAGE_URI=${{ inputs.image-uri }}
+        DEPLOY_DATE=\$(date -Iseconds)
+        DEPLOY_COMMIT=${{ github.sha }}
+        EOF
+
+          # Pull and deploy
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker compose ps
+        REMOTE_SCRIPT
+
+    - name: Wait for health
+      if: inputs.wait == 'true'
+      shell: bash
+      run: |
+        SSH_CMD="ssh -i ~/.ssh/deploy_key ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}"
+        DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
+        TIMEOUT=${{ inputs.timeout }}
+        INTERVAL=10
+        MAX_ATTEMPTS=$((TIMEOUT / INTERVAL))
+
+        echo "Waiting for service health (timeout: ${TIMEOUT}s)..."
+        for i in $(seq 1 $MAX_ATTEMPTS); do
+          HEALTH=$($SSH_CMD "cd $DEPLOY_DIR && docker compose ps --format json" | \
+            jq -r '.[0].Health // "starting"')
+
+          if [ "$HEALTH" = "healthy" ]; then
+            echo "Service healthy after $((i * INTERVAL))s"
+            exit 0
+          fi
+
+          echo "Attempt $i/$MAX_ATTEMPTS: $HEALTH"
+          sleep $INTERVAL
+        done
+
+        echo "::error::Service not healthy within ${TIMEOUT}s"
+        $SSH_CMD "cd $DEPLOY_DIR && docker compose logs --tail=50"
+        exit 1
+
+    - name: Cleanup SSH
+      if: always()
+      shell: bash
+      run: rm -f ~/.ssh/deploy_key
