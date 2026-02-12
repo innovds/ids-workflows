@@ -88,6 +88,31 @@ on:
         required: false
         type: string
         default: ''
+      deploy-type:
+        description: 'Deployment type: ecs | compose'
+        required: false
+        type: string
+        default: 'ecs'
+      ssh-host:
+        description: '[Compose] VM hostname or IP'
+        required: false
+        type: string
+        default: ''
+      ssh-user:
+        description: '[Compose] SSH user'
+        required: false
+        type: string
+        default: 'ec2-user'
+      compose-file:
+        description: '[Compose] Path to compose.yml in repo'
+        required: false
+        type: string
+        default: 'compose.yml'
+      deploy-path:
+        description: '[Compose] Base deploy path on VM'
+        required: false
+        type: string
+        default: '/opt/ids/deploy'
 
     secrets:
       AWS_ROLE_TO_ASSUME:
@@ -97,6 +122,8 @@ on:
       REGISTRY_USERNAME:
         required: false
       REGISTRY_PASSWORD:
+        required: false
+      SSH_PRIVATE_KEY:
         required: false
 
     outputs:
@@ -293,7 +320,9 @@ jobs:
 
           echo "uri=$REGISTRY/$REPO:$TAG" >> $GITHUB_OUTPUT
 
+      # --- ECS deployment ---
       - name: Resolve ECS names
+        if: inputs.deploy-type == 'ecs'
         id: ecs
         run: |
           # Cluster: override or {prefix}-{env}-cluster
@@ -311,7 +340,8 @@ jobs:
           [ -z "$TASK" ] && TASK="${{ steps.service.outputs.name }}-task"
           echo "task=$TASK" >> $GITHUB_OUTPUT
 
-      - name: Deploy
+      - name: Deploy to ECS
+        if: inputs.deploy-type == 'ecs'
         uses: innovds/ids-workflows/actions/ecs-deploy@main
         with:
           aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -321,3 +351,20 @@ jobs:
           task-family: ${{ steps.ecs.outputs.task }}
           container-name: ${{ steps.service.outputs.name }}
           image-uri: ${{ steps.image.outputs.uri }}
+
+      # --- Compose deployment ---
+      - uses: actions/checkout@v4
+        if: inputs.deploy-type == 'compose'
+
+      - name: Deploy via Compose
+        if: inputs.deploy-type == 'compose'
+        uses: innovds/ids-workflows/actions/compose-deploy@main
+        with:
+          ssh-host: ${{ inputs.ssh-host }}
+          ssh-user: ${{ inputs.ssh-user }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          service-name: ${{ steps.service.outputs.name }}
+          image-uri: ${{ steps.image.outputs.uri }}
+          compose-file: ${{ inputs.compose-file }}
+          deploy-path: ${{ inputs.deploy-path }}
+          aws-region: ${{ inputs.aws-region }}

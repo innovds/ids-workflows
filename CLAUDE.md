@@ -25,6 +25,7 @@ templates/              # Sources with {{placeholders}}
 ├── actions/
 │   ├── docker-build/   # Unified Docker build action
 │   ├── ecr-login/
+│   ├── compose-deploy/ # VM deploy via SSH + docker compose
 │   ├── ecs-deploy/
 │   └── maven-settings/
 └── scripts/
@@ -46,7 +47,7 @@ config.local.sh         # Local config (gitignored)
 | Workflow | Purpose | Key Inputs |
 |----------|---------|------------|
 | `ms-ci.yml` | PR validation | `run-tests`, `build-validation` |
-| `ms-pipeline.yml` | Full pipeline | `registry-type`, `repository`, `run-tests`, `build-push`, `deploy-env` |
+| `ms-pipeline.yml` | Full pipeline | `registry-type`, `repository`, `run-tests`, `build-push`, `deploy-env`, `deploy-type` |
 | `azure-boards-sync.yml` | Update Azure Boards work item state | `target-state`, `pr-title`, `pr-body` |
 
 ## Shared Actions
@@ -55,6 +56,7 @@ config.local.sh         # Local config (gitignored)
 |--------|---------|-------------------|
 | `docker-build` | Build & optionally push | ✅ Yes |
 | `ecr-login` | AWS ECR login via OIDC | ECR only |
+| `compose-deploy` | VM deploy via SSH + Docker Compose | ✅ Yes |
 | `ecs-deploy` | ECS Fargate deploy | AWS only |
 | `ecs-restart` | Restart ECS service | AWS only |
 | `maven-settings` | Prepare settings.xml | - |
@@ -89,17 +91,25 @@ uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
 with:
   run-tests: true
 
-# build-deploy.yml - Push to main triggers full pipeline
+# build-deploy.yml - ECS deploy (default)
 uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
 with:
   run-tests: true
   build-push: true
   deploy-env: int
 
-# release.yml - Tag releases/v* triggers full pipeline
+# build-deploy.yml - VM Compose deploy (deploy-type: compose)
 uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
 with:
   run-tests: true
   build-push: true
   deploy-env: int
+  deploy-type: compose
+  ssh-host: ${{ vars.SSH_HOST }}
+  compose-file: deploy/compose.yml
+secrets:
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+# Conditional: int=compose, stg/prod=ecs
+deploy-type: ${{ inputs.environment == 'int' && 'compose' || 'ecs' }}
 ```
