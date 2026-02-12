@@ -129,7 +129,7 @@ runs:
         echo "Waiting for service health (timeout: ${TIMEOUT}s)..."
         for i in $(seq 1 $MAX_ATTEMPTS); do
           HEALTH=$($SSH_CMD "cd $DEPLOY_DIR && docker compose ps --format json" | \
-            jq -r '.[0].Health // "starting"')
+            jq -sr 'if type == "array" then .[0] else . end | .Health // "starting"')
 
           if [ "$HEALTH" = "healthy" ]; then
             echo "Service healthy after $((i * INTERVAL))s"
