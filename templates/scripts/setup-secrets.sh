@@ -20,6 +20,7 @@ AWS_REGION="{{AWS_REGION}}"
 AWS_ACCOUNT_ID="{{AWS_ACCOUNT_ID}}"
 SKIP_AWS=false
 AWS_ROLE_ARN=""
+SSH_KEY_PATH=""
 
 print_header() { echo -e "\n${GREEN}=== $1 ===${NC}\n"; }
 print_warning() { echo -e "${YELLOW}⚠ $1${NC}"; }
@@ -37,12 +38,14 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --aws-role-arn ARN     Use existing IAM role ARN (skip OIDC creation)"
+    echo "  --ssh-key PATH         SSH private key file for VM deploy (stored plain, not base64)"
     echo "  --skip-aws             Skip AWS setup entirely"
     echo "  --help                 Show this help"
     echo ""
     echo "Secrets configured:"
     echo "  - MAVEN_SETTINGS_XML : Base64 encoded ~/.m2/settings-github.xml (or settings.xml)"
     echo "  - AWS_ROLE_TO_ASSUME : AWS IAM Role ARN for OIDC"
+    echo "  - SSH_PRIVATE_KEY    : SSH private key for VM deploy (plain, not base64)"
     echo ""
     echo "Examples:"
     echo "  $0 --repo {{ORG_NAME}}/iam-ms --aws-role-arn arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/github-actions-role"
@@ -285,6 +288,24 @@ EOF
     print_success "AWS_ROLE_TO_ASSUME: $ROLE_ARN"
 }
 
+setup_ssh_key() {
+    if [ -z "$SSH_KEY_PATH" ]; then
+        return 0
+    fi
+
+    print_header "Setting up SSH key"
+
+    if [ ! -f "$SSH_KEY_PATH" ]; then
+        print_error "SSH key file not found: $SSH_KEY_PATH"
+        exit 1
+    fi
+
+    echo "Setting SSH_PRIVATE_KEY for repo: $REPO"
+    gh secret set SSH_PRIVATE_KEY --repo "$REPO" < "$SSH_KEY_PATH"
+
+    print_success "SSH_PRIVATE_KEY configured (plain, not base64)"
+}
+
 main() {
     echo -e "${GREEN}"
     echo "╔═══════════════════════════════════════════════╗"
@@ -304,6 +325,10 @@ main() {
                 ;;
             --aws-role-arn)
                 AWS_ROLE_ARN="$2"
+                shift 2
+                ;;
+            --ssh-key)
+                SSH_KEY_PATH="$2"
                 shift 2
                 ;;
             --help)
@@ -329,13 +354,17 @@ main() {
     check_prerequisites
     setup_maven_settings
     setup_aws_oidc
+    setup_ssh_key
 
     print_header "Setup Complete!"
 
     echo "Secrets configured for $REPO:"
-    echo "  ✓ MAVEN_SETTINGS_XML"
+    echo "  ✓ MAVEN_SETTINGS_XML (base64)"
     if [ "$SKIP_AWS" = false ]; then
         echo "  ✓ AWS_ROLE_TO_ASSUME"
+    fi
+    if [ -n "$SSH_KEY_PATH" ]; then
+        echo "  ✓ SSH_PRIVATE_KEY (plain)"
     fi
     echo ""
     echo "Next steps:"

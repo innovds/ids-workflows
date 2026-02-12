@@ -522,13 +522,14 @@ vim config.local.sh  # Adapter les valeurs
 
 ## Secrets GitHub
 
-| Secret | Description |
-|--------|-------------|
-| `MAVEN_SETTINGS_XML` | `base64 -i settings.xml` |
-| `AWS_ROLE_TO_ASSUME` | ARN rôle IAM OIDC (ECR) |
-| `REGISTRY_USERNAME` | Username registry (Docker Hub, GHCR, Nexus, ACR...) |
-| `REGISTRY_PASSWORD` | Password/token registry |
-| `AZURE_DEVOPS_PAT` | PAT Azure DevOps (scope: Work Items R/W) |
+| Secret | Encoding | Description |
+|--------|----------|-------------|
+| `MAVEN_SETTINGS_XML` | base64 | `base64 -i settings.xml` |
+| `AWS_ROLE_TO_ASSUME` | plain | ARN rôle IAM OIDC (ECR) |
+| `SSH_PRIVATE_KEY` | plain | Clé SSH privée PEM (contenu brut, pas base64) |
+| `REGISTRY_USERNAME` | plain | Username registry (Docker Hub, GHCR, Nexus, ACR...) |
+| `REGISTRY_PASSWORD` | plain | Password/token registry |
+| `AZURE_DEVOPS_PAT` | plain | PAT Azure DevOps (scope: Work Items R/W) |
 
 ---
 
