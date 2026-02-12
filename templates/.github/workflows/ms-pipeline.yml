@@ -114,10 +114,10 @@ on:
         type: string
         default: '/opt/ids/deploy'
       image-env-var:
-        description: '[Compose] Env var name for image URI in .env.deploy'
+        description: '[Compose] Env var name for image in .env'
         required: false
         type: string
-        default: 'IMAGE_URI'
+        default: 'DOCKER_IMAGE'
 
     secrets:
       AWS_ROLE_TO_ASSUME:

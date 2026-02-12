@@ -43,9 +43,9 @@ inputs:
     required: false
     default: '300'
   image-env-var:
-    description: 'Environment variable name for image URI in .env.deploy'
+    description: 'Environment variable name for image in .env'
     required: false
-    default: 'IMAGE_URI'
+    default: 'DOCKER_IMAGE'
 
 runs:
   using: 'composite'
