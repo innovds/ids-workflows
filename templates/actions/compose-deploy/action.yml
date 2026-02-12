@@ -64,7 +64,11 @@ runs:
         mkdir -p ~/.ssh
         echo "${{ inputs.ssh-key }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -H ${{ inputs.ssh-host }} >> ~/.ssh/known_hosts 2>/dev/null
+        cat >> ~/.ssh/config <<EOF
+        Host ${{ inputs.ssh-host }}
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+        EOF
 
     - name: Prepare remote directory
       shell: bash
