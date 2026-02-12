@@ -26,6 +26,10 @@ inputs:
     description: 'Base deploy path on VM'
     required: false
     default: '/opt/ids/deploy'
+  registry-type:
+    description: 'Registry type: ecr, dockerhub, ghcr, none'
+    required: false
+    default: 'ecr'
   aws-region:
     description: 'AWS region for ECR login on VM'
     required: false
@@ -38,6 +42,10 @@ inputs:
     description: 'Health check timeout in seconds'
     required: false
     default: '300'
+  image-env-var:
+    description: 'Environment variable name for image URI in .env.deploy'
+    required: false
+    default: 'IMAGE_URI'
 
 runs:
   using: 'composite'
@@ -85,13 +93,15 @@ runs:
           set -euo pipefail
           cd $DEPLOY_DIR
 
-          # ECR login (assumes IAM instance profile on VM)
-          aws ecr get-login-password --region ${{ inputs.aws-region }} | \
-            docker login --username AWS --password-stdin $REGISTRY
+          # Registry login (conditional on registry type)
+          if [ "${{ inputs.registry-type }}" = "ecr" ]; then
+            aws ecr get-login-password --region ${{ inputs.aws-region }} | \
+              docker login --username AWS --password-stdin $REGISTRY
+          fi
 
           # Write deployment env
           cat > .env.deploy <<EOF
-        IMAGE_URI=${{ inputs.image-uri }}
+        ${{ inputs.image-env-var }}=${{ inputs.image-uri }}
         DEPLOY_DATE=\$(date -Iseconds)
         DEPLOY_COMMIT=${{ github.sha }}
         EOF

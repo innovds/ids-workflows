@@ -113,6 +113,11 @@ on:
         required: false
         type: string
         default: '/opt/ids/deploy'
+      image-env-var:
+        description: '[Compose] Env var name for image URI in .env.deploy'
+        required: false
+        type: string
+        default: 'IMAGE_URI'
 
     secrets:
       AWS_ROLE_TO_ASSUME:
@@ -367,4 +372,6 @@ jobs:
           image-uri: ${{ steps.image.outputs.uri }}
           compose-file: ${{ inputs.compose-file }}
           deploy-path: ${{ inputs.deploy-path }}
+          registry-type: ${{ inputs.registry-type }}
           aws-region: ${{ inputs.aws-region }}
+          image-env-var: ${{ inputs.image-env-var }}
