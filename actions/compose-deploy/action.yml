@@ -110,6 +110,9 @@ runs:
         DEPLOY_COMMIT=${{ github.sha }}
         EOF
 
+          # Export image for compose.yml interpolation (shell env overrides .env file)
+          export ${{ inputs.image-env-var }}="${{ inputs.image-uri }}"
+
           # Pull and deploy
           docker compose pull
           docker compose up -d --remove-orphans
