@@ -103,15 +103,18 @@ runs:
               docker login --username AWS --password-stdin $REGISTRY
           fi
 
-          # Write deployment env
+          # Update image in .env for compose.yml interpolation (persists across restarts)
+          if grep -q "^${{ inputs.image-env-var }}=" .env 2>/dev/null; then
+            sed -i "s|^${{ inputs.image-env-var }}=.*|${{ inputs.image-env-var }}=${{ inputs.image-uri }}|" .env
+          else
+            echo "${{ inputs.image-env-var }}=${{ inputs.image-uri }}" >> .env
+          fi
+
+          # Write deployment metadata
           cat > .env.deploy <<EOF
-        ${{ inputs.image-env-var }}=${{ inputs.image-uri }}
         DEPLOY_DATE=\$(date -Iseconds)
         DEPLOY_COMMIT=${{ github.sha }}
         EOF
-
-          # Export image for compose.yml interpolation (shell env overrides .env file)
-          export ${{ inputs.image-env-var }}="${{ inputs.image-uri }}"
 
           # Pull and deploy
           docker compose pull
