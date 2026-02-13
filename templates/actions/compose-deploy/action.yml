@@ -131,6 +131,25 @@ runs:
           ${{ steps.compose.outputs.file }} \
           ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}:${{ inputs.deploy-path }}/${{ inputs.service-name }}/compose.yml
 
+    - name: Get registry token
+      id: token
+      shell: bash
+      run: |
+        case "${{ inputs.registry-type }}" in
+          ecr)
+            echo "password=$(aws ecr get-login-password --region ${{ inputs.aws-region }})" >> $GITHUB_OUTPUT
+            echo "username=AWS" >> $GITHUB_OUTPUT
+            ;;
+          none)
+            echo "password=" >> $GITHUB_OUTPUT
+            echo "username=" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "password=${{ inputs.registry-password }}" >> $GITHUB_OUTPUT
+            echo "username=${{ inputs.registry-username }}" >> $GITHUB_OUTPUT
+            ;;
+        esac
+
     - name: Deploy
       shell: bash
       run: |
@@ -138,22 +157,15 @@ runs:
         DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
         REGISTRY=$(echo "${{ inputs.image-uri }}" | cut -d'/' -f1)
 
+        # Registry login on VM (token obtained on runner)
+        if [ -n "${{ steps.token.outputs.password }}" ]; then
+          echo "${{ steps.token.outputs.password }}" | \
+            $SSH_CMD "docker login --username ${{ steps.token.outputs.username }} --password-stdin $REGISTRY"
+        fi
+
         $SSH_CMD bash <<REMOTE_SCRIPT
           set -euo pipefail
           cd $DEPLOY_DIR
-
-          # Registry login
-          case "${{ inputs.registry-type }}" in
-            ecr)
-              aws ecr get-login-password --region ${{ inputs.aws-region }} | \
-                docker login --username AWS --password-stdin $REGISTRY
-              ;;
-            none) ;;
-            *)
-              echo "${{ inputs.registry-password }}" | \
-                docker login --username "${{ inputs.registry-username }}" --password-stdin $REGISTRY
-              ;;
-          esac
 
           # Update image in .env for compose.yml interpolation (persists across restarts)
           touch .env
