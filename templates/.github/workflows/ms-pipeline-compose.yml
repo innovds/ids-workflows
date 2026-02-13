@@ -185,3 +185,4 @@ jobs:
           registry-username: ${{ secrets.REGISTRY_USERNAME }}
           registry-password: ${{ secrets.REGISTRY_PASSWORD }}
           image-env-var: ${{ inputs.image-env-var }}
+          aws-region: ${{ inputs.aws-region }}
