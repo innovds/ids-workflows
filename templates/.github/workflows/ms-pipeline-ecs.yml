@@ -43,20 +43,24 @@ on:
         description: 'AWS Region'
         type: string
         default: '{{AWS_REGION}}'
+      cluster-prefix:
+        description: 'ECS cluster prefix (default: app)'
+        type: string
+        default: 'app'
       cluster-name:
-        description: 'ECS cluster name (default: app-{env})'
+        description: 'Override ECS cluster name (default: {prefix}-{env}-cluster)'
         type: string
         default: ''
       service-name:
-        description: 'ECS service name (default: {repo-name}-{env})'
+        description: 'Override ECS service name (default: {repo}-task-service)'
         type: string
         default: ''
       task-family:
-        description: 'ECS task family (default: {repo-name}-{env})'
+        description: 'Override task family (default: {repo}-task)'
         type: string
         default: ''
       container-name:
-        description: 'Container name in task def (default: {repo-name})'
+        description: 'Container name in task def (default: {repo})'
         type: string
         default: ''
 
@@ -171,9 +175,9 @@ jobs:
         run: |
           ENV="${{ inputs.deploy-env }}"
           REPO="${{ github.event.repository.name }}"
-          CLUSTER="${{ inputs.cluster-name }}"; [ -z "$CLUSTER" ] && CLUSTER="app-${ENV}"
-          SERVICE="${{ inputs.service-name }}"; [ -z "$SERVICE" ] && SERVICE="${REPO}-${ENV}"
-          TASK="${{ inputs.task-family }}"; [ -z "$TASK" ] && TASK="${REPO}-${ENV}"
+          CLUSTER="${{ inputs.cluster-name }}"; [ -z "$CLUSTER" ] && CLUSTER="${{ inputs.cluster-prefix }}-${ENV}-cluster"
+          SERVICE="${{ inputs.service-name }}"; [ -z "$SERVICE" ] && SERVICE="${REPO}-task-service"
+          TASK="${{ inputs.task-family }}"; [ -z "$TASK" ] && TASK="${REPO}-task"
           CONTAINER="${{ inputs.container-name }}"; [ -z "$CONTAINER" ] && CONTAINER="$REPO"
           echo "cluster=$CLUSTER" >> $GITHUB_OUTPUT
           echo "service=$SERVICE" >> $GITHUB_OUTPUT
