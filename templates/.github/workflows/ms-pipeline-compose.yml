@@ -1,0 +1,182 @@
+name: Pipeline (Compose)
+
+on:
+  workflow_call:
+    inputs:
+      run-tests:
+        description: 'Run tests before build'
+        type: boolean
+        default: false
+      build-image:
+        description: 'Build and push image'
+        type: boolean
+        default: true
+      image-tag:
+        description: 'Deploy specific tag (overrides auto-generated sha)'
+        type: string
+        default: ''
+      image-tag-prefix:
+        description: 'Tag prefix (e.g., spring4)'
+        type: string
+        default: ''
+      registry-type:
+        description: 'Registry type: ecr | dockerhub | ghcr | gitlab | nexus | generic'
+        type: string
+        default: 'ecr'
+      registry-url:
+        description: 'Registry URL (auto-derived for ecr/dockerhub/ghcr/gitlab)'
+        type: string
+        default: ''
+      repository:
+        description: 'Image repository (default: app/{repo-name} for ECR, {repo-name} for others)'
+        type: string
+        default: ''
+      build-args:
+        description: 'Docker build args (multiline KEY=VALUE)'
+        type: string
+        default: ''
+      ssh-host:
+        description: 'VM hostname or IP'
+        type: string
+        required: true
+      ssh-user:
+        description: 'SSH user'
+        type: string
+        default: 'ec2-user'
+      compose-file:
+        description: 'Path to compose.yml in repo'
+        type: string
+        default: 'compose.yml'
+      deploy-path:
+        description: 'Base deploy path on VM'
+        type: string
+        default: '/opt/ids/deploy'
+      image-env-var:
+        description: 'Env var name for image in .env'
+        type: string
+        default: 'DOCKER_IMAGE'
+      deploy-env:
+        description: 'Environment for GitHub protection rules (optional)'
+        type: string
+        default: ''
+
+    secrets:
+      AWS_ROLE_TO_ASSUME:
+        required: false
+      MAVEN_SETTINGS_XML:
+        required: false
+      REGISTRY_USERNAME:
+        required: false
+      REGISTRY_PASSWORD:
+        required: false
+      SSH_PRIVATE_KEY:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pipeline:
+    name: Pipeline
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deploy-env || null }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Maven settings
+        id: maven
+        uses: {{ORG_NAME}}/ids-workflows/actions/maven-settings@main
+        with:
+          settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
+
+      - name: Run tests
+        if: inputs.run-tests
+        uses: {{ORG_NAME}}/ids-workflows/actions/docker-build@main
+        with:
+          target: test
+          maven-settings-path: ${{ steps.maven.outputs.settings-path }}
+          build-args: ${{ inputs.build-args }}
+
+      - name: Resolve image tag
+        id: tag
+        shell: bash
+        run: |
+          PREFIX="${{ inputs.image-tag-prefix }}"
+          if [ -n "${{ inputs.image-tag }}" ]; then
+            echo "value=${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
+            echo "extra=" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.build-image }}" = "true" ]; then
+            SHA="sha-${GITHUB_SHA::7}"
+            if [ -n "$PREFIX" ]; then
+              echo "value=${PREFIX}-${SHA}" >> $GITHUB_OUTPUT
+              {
+                echo "extra<<EOF"
+                echo "latest"
+                echo "$PREFIX"
+                echo "EOF"
+              } >> $GITHUB_OUTPUT
+            else
+              echo "value=${SHA}" >> $GITHUB_OUTPUT
+              echo "extra=latest" >> $GITHUB_OUTPUT
+            fi
+          else
+            if [ -n "$PREFIX" ]; then
+              echo "value=${PREFIX}" >> $GITHUB_OUTPUT
+            else
+              echo "value=latest" >> $GITHUB_OUTPUT
+            fi
+            echo "extra=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Registry login
+        id: registry
+        uses: {{ORG_NAME}}/ids-workflows/actions/registry-login@main
+        with:
+          type: ${{ inputs.registry-type }}
+          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          registry: ${{ inputs.registry-url }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Resolve repository
+        id: repo
+        shell: bash
+        run: |
+          REPO="${{ inputs.repository }}"
+          if [ -z "$REPO" ]; then
+            if [ "${{ inputs.registry-type }}" = "ecr" ]; then
+              REPO="app/${{ github.event.repository.name }}"
+            else
+              REPO="${{ github.event.repository.name }}"
+            fi
+          fi
+          echo "name=$REPO" >> $GITHUB_OUTPUT
+
+      - name: Build & Push
+        if: inputs.build-image
+        uses: {{ORG_NAME}}/ids-workflows/actions/docker-build@main
+        with:
+          push: 'true'
+          registry: ${{ steps.registry.outputs.registry }}
+          repository: ${{ steps.repo.outputs.name }}
+          image-tag: ${{ steps.tag.outputs.value }}
+          extra-tags: ${{ steps.tag.outputs.extra }}
+          maven-settings-path: ${{ steps.maven.outputs.settings-path }}
+          build-args: ${{ inputs.build-args }}
+
+      - name: Deploy via Compose
+        uses: {{ORG_NAME}}/ids-workflows/actions/compose-deploy@main
+        with:
+          ssh-host: ${{ inputs.ssh-host }}
+          ssh-user: ${{ inputs.ssh-user }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          service-name: ${{ github.event.repository.name }}
+          image-uri: ${{ steps.registry.outputs.registry }}/${{ steps.repo.outputs.name }}:${{ steps.tag.outputs.value }}
+          compose-file: ${{ inputs.compose-file }}
+          deploy-path: ${{ inputs.deploy-path }}
+          registry-type: ${{ inputs.registry-type }}
+          registry-username: ${{ secrets.REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+          image-env-var: ${{ inputs.image-env-var }}
