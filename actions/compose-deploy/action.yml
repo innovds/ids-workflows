@@ -19,9 +19,9 @@ inputs:
     description: 'Full image URI (registry/repo:tag)'
     required: true
   compose-file:
-    description: 'Path to compose.yml in repo'
+    description: 'Path to compose.yml in repo (leave empty to auto-generate standard template)'
     required: false
-    default: 'compose.yml'
+    default: ''
   deploy-path:
     description: 'Base deploy path on VM'
     required: false
@@ -58,12 +58,49 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Validate inputs
+    - name: Prepare compose file
+      id: compose
       shell: bash
       run: |
-        if [ ! -f "${{ inputs.compose-file }}" ]; then
-          echo "::error::Compose file not found: ${{ inputs.compose-file }}"
-          exit 1
+        if [ -n "${{ inputs.compose-file }}" ]; then
+          if [ ! -f "${{ inputs.compose-file }}" ]; then
+            echo "::error::Compose file not found: ${{ inputs.compose-file }}"
+            exit 1
+          fi
+          echo "file=${{ inputs.compose-file }}" >> $GITHUB_OUTPUT
+        else
+          GENERATED="${{ runner.temp }}/compose.yml"
+          cat > "$GENERATED" <<'COMPOSE'
+        services:
+          __SERVICE__:
+            image: ${DOCKER_IMAGE}
+            restart: unless-stopped
+            env_file:
+              - .env
+              - path: .env.deploy
+                required: false
+            healthcheck:
+              test: ["CMD", "curl", "-f", "http://localhost:${MS_PORT}${CONTEXT_PATH}/actuator/health"]
+              interval: 30s
+              timeout: 10s
+              retries: 3
+              start_period: 30s
+            labels:
+              - "traefik.enable=true"
+              - "traefik.http.routers.__SERVICE__.rule=Host(`${DOMAIN}`) && PathPrefix(`${CONTEXT_PATH}`)"
+              - "traefik.http.routers.__SERVICE__.entrypoints=websecure"
+              - "traefik.http.routers.__SERVICE__.tls=true"
+              - "traefik.http.services.__SERVICE__.loadbalancer.server.port=${MS_PORT}"
+            networks:
+              - local_network
+
+        networks:
+          local_network:
+            external: true
+        COMPOSE
+          sed -i "s/__SERVICE__/${{ inputs.service-name }}/g" "$GENERATED"
+          echo "file=$GENERATED" >> $GITHUB_OUTPUT
+          echo "Generated compose.yml for service: ${{ inputs.service-name }}"
         fi
 
     - name: Setup SSH
@@ -91,7 +128,7 @@ runs:
       shell: bash
       run: |
         scp -i ~/.ssh/deploy_key \
-          ${{ inputs.compose-file }} \
+          ${{ steps.compose.outputs.file }} \
           ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}:${{ inputs.deploy-path }}/${{ inputs.service-name }}/compose.yml
 
     - name: Deploy

@@ -44,9 +44,9 @@ on:
         type: string
         default: 'ec2-user'
       compose-file:
-        description: 'Path to compose.yml in repo'
+        description: 'Path to compose.yml in repo (empty = auto-generate standard template)'
         type: string
-        default: 'compose.yml'
+        default: ''
       deploy-path:
         description: 'Base deploy path on VM'
         type: string
