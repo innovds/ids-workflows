@@ -55,6 +55,10 @@ on:
         description: 'Env var name for image in .env'
         type: string
         default: 'DOCKER_IMAGE'
+      aws-region:
+        description: 'AWS Region (ECR only)'
+        type: string
+        default: '{{AWS_REGION}}'
       deploy-env:
         description: 'Environment for GitHub protection rules (optional)'
         type: string
@@ -136,6 +140,7 @@ jobs:
         with:
           type: ${{ inputs.registry-type }}
           aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.aws-region }}
           registry: ${{ inputs.registry-url }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
