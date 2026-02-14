@@ -34,7 +34,7 @@ on:
 
 jobs:
   ci:
-    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-ci.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ci.yml@main
     with:
       run-tests: true
       build-validation: false
@@ -74,7 +74,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       run-tests: ${{ inputs.run-tests }}
       build-push: ${{ inputs.build-image }}
@@ -98,7 +98,7 @@ permissions:
 
 jobs:
   release:
-    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: {{ORG_NAME}}/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       run-tests: true
       build-push: true

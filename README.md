@@ -14,8 +14,8 @@ flowchart TB
 
     subgraph "ids-workflows"
         subgraph "Workflows"
-            MS_CI[ms-ci.yml]
-            MS_PIPELINE[ms-pipeline.yml]
+            CI_WF[ci.yml]
+            PIPELINE_WF[pipeline.yml]
         end
         subgraph "Actions"
             DOCKER_BUILD[docker-build]
@@ -25,17 +25,17 @@ flowchart TB
         end
     end
 
-    CI_YML -->|uses| MS_CI
-    RELEASE_YML -->|uses| MS_PIPELINE
-    DEPLOY_YML -->|uses| MS_PIPELINE
+    CI_YML -->|uses| CI_WF
+    RELEASE_YML -->|uses| PIPELINE_WF
+    DEPLOY_YML -->|uses| PIPELINE_WF
 
-    MS_CI --> DOCKER_BUILD
-    MS_CI --> MAVEN_SETTINGS
-    MS_PIPELINE --> DOCKER_BUILD
-    MS_PIPELINE -->|ecr| ECR_LOGIN
-    MS_PIPELINE -->|non-ecr| DOCKER_LOGIN[docker/login-action]
-    MS_PIPELINE --> ECS_DEPLOY
-    MS_PIPELINE --> MAVEN_SETTINGS
+    CI_WF --> DOCKER_BUILD
+    CI_WF --> MAVEN_SETTINGS
+    PIPELINE_WF --> DOCKER_BUILD
+    PIPELINE_WF -->|ecr| ECR_LOGIN
+    PIPELINE_WF -->|non-ecr| DOCKER_LOGIN[docker/login-action]
+    PIPELINE_WF --> ECS_DEPLOY
+    PIPELINE_WF --> MAVEN_SETTINGS
 ```
 
 ## Workflow Types
@@ -74,7 +74,7 @@ flowchart LR
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `ci.yml` | PR → main | Tests uniquement (via ms-pipeline) |
+| `ci.yml` | PR → main | Tests uniquement (via pipeline) |
 | `build-deploy.yml` | Push → main | Tests → Build → Push → Deploy INT |
 | `release.yml` | Tag `releases/v*` | Tests → Build → Push → Deploy INT |
 
@@ -101,14 +101,14 @@ flowchart LR
 
 ## Shared Workflows
 
-### `ms-ci.yml` - CI Pipeline
+### `ci.yml` - CI Pipeline
 
 Validation des PRs : tests + build image (sans push).
 
 ```yaml
 jobs:
   ci:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-ci.yml@main
+    uses: ids-aws/ids-workflows/.github/workflows/ci.yml@main
     with:
       service-name: my-service
       run-tests: true
@@ -133,7 +133,7 @@ jobs:
 
 ---
 
-### `ms-pipeline.yml` - Full Pipeline
+### `pipeline.yml` - Full Pipeline
 
 Pipeline complet : tests → build → push → deploy. Supporte ECR, Docker Hub, GHCR, ACR, Nexus, et tout registry générique.
 
@@ -143,7 +143,7 @@ Pipeline complet : tests → build → push → deploy. Supporte ECR, Docker Hub
 ```yaml
 jobs:
   pipeline:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: ids-aws/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       run-tests: true
       build-push: true
@@ -157,7 +157,7 @@ jobs:
 ```yaml
 jobs:
   pipeline:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: ids-aws/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       registry-type: dockerhub
       repository: myorg/my-service
@@ -172,7 +172,7 @@ jobs:
 ```yaml
 jobs:
   pipeline:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: ids-aws/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       registry-type: ghcr
       repository: myorg/my-service
@@ -187,7 +187,7 @@ jobs:
 ```yaml
 jobs:
   pipeline:
-    uses: ids-aws/ids-workflows/.github/workflows/ms-pipeline.yml@main
+    uses: ids-aws/ids-workflows/.github/workflows/pipeline.yml@main
     with:
       registry-type: nexus          # ou acr, generic
       registry-url: nexus.company.com:8443
@@ -538,8 +538,8 @@ vim config.local.sh  # Adapter les valeurs
 ```
 ids-workflows/
 ├── .github/workflows/
-│   ├── ms-ci.yml              # Workflow réutilisable CI
-│   ├── ms-pipeline.yml        # Workflow réutilisable pipeline complet
+│   ├── ci.yml              # Workflow réutilisable CI
+│   ├── pipeline.yml        # Workflow réutilisable pipeline complet
 │   ├── azure-boards-sync.yml  # Sync PR events → Azure Boards
 │   └── check-templates.yml    # CI interne (sync templates)
 ├── actions/
@@ -564,6 +564,6 @@ ids-workflows/
 
 1. **Docker-only** : Pas de setup Java/Maven sur runners
 2. **Build once, deploy everywhere** : Même image entre environnements
-3. **Registry-agnostic** : `ms-pipeline.yml` supporte ECR, Docker Hub, GHCR, ACR, Nexus via `registry-type`
+3. **Registry-agnostic** : `pipeline.yml` supporte ECR, Docker Hub, GHCR, ACR, Nexus via `registry-type`
 4. **OIDC** : Pas de credentials AWS statiques
 5. **DRY** : Actions et workflows réutilisables
