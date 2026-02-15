@@ -23,6 +23,6 @@ runs:
         if [ -n "${{ inputs.settings-base64 }}" ]; then
           echo "${{ inputs.settings-base64 }}" | base64 -d > "$SETTINGS_PATH"
         else
-          touch "$SETTINGS_PATH"
+          echo '<settings/>' > "$SETTINGS_PATH"
         fi
         echo "path=$SETTINGS_PATH" >> $GITHUB_OUTPUT
