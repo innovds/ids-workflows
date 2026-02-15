@@ -17,7 +17,7 @@ on:
         description: 'SonarQube server URL'
         required: false
         type: string
-        default: ''
+        default: 'https://ellarea-int.innov-ds.com/sonarqube'
       java-version:
         description: 'Java version for analysis'
         required: false
