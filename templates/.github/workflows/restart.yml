@@ -1,0 +1,98 @@
+name: Service Restart
+
+on:
+  workflow_call:
+    inputs:
+      deploy-type:
+        description: 'Restart type: compose | ecs'
+        required: true
+        type: string
+      service-name:
+        description: 'Service name (default: repo name)'
+        required: false
+        type: string
+        default: ''
+      # Compose inputs
+      ssh-host:
+        description: '[Compose] VM hostname or IP'
+        required: false
+        type: string
+        default: ''
+      ssh-user:
+        description: '[Compose] SSH user'
+        required: false
+        type: string
+        default: 'ec2-user'
+      deploy-path:
+        description: '[Compose] Base deploy path on VM'
+        required: false
+        type: string
+        default: '/opt/ids/deploy'
+      # ECS inputs
+      cluster-name:
+        description: '[ECS] Cluster name'
+        required: false
+        type: string
+        default: 'app-int-cluster'
+      ecs-service-name:
+        description: '[ECS] Override ECS service name (default: {service}-task-service)'
+        required: false
+        type: string
+        default: ''
+      aws-region:
+        description: '[ECS] AWS Region'
+        required: false
+        type: string
+        default: '{{AWS_REGION}}'
+
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: false
+      AWS_ROLE_TO_ASSUME:
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  restart:
+    name: Restart ${{ inputs.service-name || github.event.repository.name }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve service name
+        id: service
+        run: |
+          NAME="${{ inputs.service-name }}"
+          [ -z "$NAME" ] && NAME="${{ github.event.repository.name }}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      # --- Compose restart ---
+      - name: Restart via Compose
+        if: inputs.deploy-type == 'compose'
+        uses: {{ORG_NAME}}/ids-workflows/actions/compose-restart@main
+        with:
+          ssh-host: ${{ inputs.ssh-host }}
+          ssh-user: ${{ inputs.ssh-user }}
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          service-name: ${{ steps.service.outputs.name }}
+          deploy-path: ${{ inputs.deploy-path }}
+
+      # --- ECS restart ---
+      - name: Resolve ECS service name
+        if: inputs.deploy-type == 'ecs'
+        id: ecs
+        run: |
+          SERVICE="${{ inputs.ecs-service-name }}"
+          [ -z "$SERVICE" ] && SERVICE="${{ steps.service.outputs.name }}-task-service"
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+
+      - name: Restart ECS service
+        if: inputs.deploy-type == 'ecs'
+        uses: {{ORG_NAME}}/ids-workflows/actions/ecs-restart@main
+        with:
+          aws-role: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.aws-region }}
+          cluster-name: ${{ inputs.cluster-name }}
+          service-name: ${{ steps.ecs.outputs.service }}

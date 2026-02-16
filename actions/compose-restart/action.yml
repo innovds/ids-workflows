@@ -1,0 +1,95 @@
+name: 'Compose Restart'
+description: 'Restart a Docker Compose service on VM via SSH (pull + down + up)'
+
+inputs:
+  ssh-host:
+    description: 'VM hostname or IP'
+    required: true
+  ssh-user:
+    description: 'SSH user'
+    required: false
+    default: 'ec2-user'
+  ssh-key:
+    description: 'SSH private key content'
+    required: true
+  service-name:
+    description: 'Service name (used for deploy directory)'
+    required: true
+  deploy-path:
+    description: 'Base deploy path on VM'
+    required: false
+    default: '/opt/ids/deploy'
+  wait:
+    description: 'Wait for service to become healthy'
+    required: false
+    default: 'true'
+  timeout:
+    description: 'Health check timeout in seconds'
+    required: false
+    default: '120'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup SSH
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh-key }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        cat >> ~/.ssh/config <<EOF
+        Host ${{ inputs.ssh-host }}
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+        EOF
+
+    - name: Restart service
+      shell: bash
+      run: |
+        SSH_CMD="ssh -i ~/.ssh/deploy_key ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}"
+        DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
+
+        echo "Restarting ${{ inputs.service-name }} on ${{ inputs.ssh-host }}..."
+        $SSH_CMD bash <<REMOTE_SCRIPT
+          set -euo pipefail
+          cd $DEPLOY_DIR
+
+          docker compose pull
+          docker compose down
+          docker compose up -d
+          docker compose ps
+        REMOTE_SCRIPT
+        echo "Restart triggered"
+
+    - name: Wait for health
+      if: inputs.wait == 'true'
+      shell: bash
+      run: |
+        SSH_CMD="ssh -i ~/.ssh/deploy_key ${{ inputs.ssh-user }}@${{ inputs.ssh-host }}"
+        DEPLOY_DIR="${{ inputs.deploy-path }}/${{ inputs.service-name }}"
+        TIMEOUT=${{ inputs.timeout }}
+        INTERVAL=10
+        MAX_ATTEMPTS=$((TIMEOUT / INTERVAL))
+
+        echo "Waiting for service health (timeout: ${TIMEOUT}s)..."
+        for i in $(seq 1 $MAX_ATTEMPTS); do
+          HEALTH=$($SSH_CMD "cd $DEPLOY_DIR && docker compose ps --format json" | \
+            jq -sr 'if type == "array" then .[0] else . end | .Health // "starting"')
+
+          if [ "$HEALTH" = "healthy" ]; then
+            echo "Service healthy after $((i * INTERVAL))s"
+            exit 0
+          fi
+
+          echo "Attempt $i/$MAX_ATTEMPTS: $HEALTH"
+          sleep $INTERVAL
+        done
+
+        echo "::error::Service not healthy within ${TIMEOUT}s"
+        $SSH_CMD "cd $DEPLOY_DIR && docker compose logs --tail=50"
+        exit 1
+
+    - name: Cleanup SSH
+      if: always()
+      shell: bash
+      run: rm -f ~/.ssh/deploy_key
