@@ -66,7 +66,7 @@ flowchart LR
 
 > **Principe**: Build once, deploy everywhere (même image promue entre envs via `sha-{commit}`)
 >
-> **Image tags**: Chaque build push `sha-{commit}` (immutable) + `latest` (toujours à jour)
+> **Image tags**: Chaque build push `sha-{commit}` (immutable) + `latest` (sans prefix) ou `{prefix}` (avec prefix)
 
 ---
 
@@ -491,35 +491,6 @@ jobs:
 
 ---
 
-## Configuration Multi-Org
-
-Le repo utilise des templates avec placeholders pour supporter plusieurs organisations.
-
-```bash
-# Structure
-templates/           # Sources avec {{ORG_NAME}}, {{AWS_ACCOUNT_ID}}, etc.
-config.example.sh    # Template config
-config.local.sh      # Config locale (gitignored)
-scripts/render.sh    # Génère les fichiers
-
-# Usage
-cp config.example.sh config.local.sh
-vim config.local.sh  # Adapter les valeurs
-./scripts/render.sh
-```
-
-**Placeholders :**
-
-| Variable | Exemple |
-|----------|---------|
-| `{{ORG_NAME}}` | `ids-aws` |
-| `{{AWS_ACCOUNT_ID}}` | `857736876208` |
-| `{{AWS_REGION}}` | `eu-west-1` |
-| `{{AZURE_ORG}}` | `INNOVAWST` |
-| `{{AZURE_PROJECT}}` | `ZenYaa` |
-
----
-
 ## Secrets GitHub
 
 | Secret | Encoding | Description |
@@ -538,24 +509,27 @@ vim config.local.sh  # Adapter les valeurs
 ```
 ids-workflows/
 ├── .github/workflows/
-│   ├── ci.yml              # Workflow réutilisable CI
-│   ├── pipeline.yml        # Workflow réutilisable pipeline complet
-│   ├── azure-boards-sync.yml  # Sync PR events → Azure Boards
-│   └── check-templates.yml    # CI interne (sync templates)
+│   ├── ci.yml                 # Workflow réutilisable CI
+│   ├── pipeline.yml           # Workflow réutilisable pipeline complet
+│   ├── pipeline-compose.yml   # Pipeline Compose
+│   ├── pipeline-ecs.yml       # Pipeline ECS
+│   ├── restart.yml            # Restart service (compose ou ECS)
+│   └── azure-boards-sync.yml  # Sync PR events → Azure Boards
 ├── actions/
 │   ├── azure-boards-update/   # Update Azure Boards work item
+│   ├── compose-deploy/        # Deploy VM via SSH + Docker Compose
+│   ├── compose-restart/       # Restart VM via SSH (pull + down + up)
 │   ├── docker-build/          # Build Docker unifié
 │   ├── ecr-login/             # Login ECR OIDC
 │   ├── ecs-deploy/            # Deploy ECS Fargate
+│   ├── ecs-restart/           # Restart ECS service
 │   └── maven-settings/        # Prépare Maven
-├── templates/               # Sources avec {{placeholders}}
 ├── scripts/
-│   ├── render.sh            # Génère depuis templates
-│   ├── init-repo.sh         # Init workflows pour MS
-│   ├── setup-secrets.sh     # Configure secrets GitHub
-│   └── protect-branch.sh    # Protection branche main
+│   ├── init-repo.sh           # Init workflows pour MS
+│   ├── setup-secrets.sh       # Configure secrets GitHub
+│   └── protect-branch.sh      # Protection branche main
 └── docs/
-    └── aws-oidc-setup.md    # Guide config OIDC AWS
+    └── aws-oidc-setup.md      # Guide config OIDC AWS
 ```
 
 ---

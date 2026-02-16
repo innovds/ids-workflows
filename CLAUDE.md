@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Purpose
 
-Reusable GitHub Actions workflows for IDS microservices CI/CD. Multi-org support via templates.
+Reusable GitHub Actions workflows for IDS microservices CI/CD.
 
 ## Key Design Decisions
 
@@ -12,34 +12,32 @@ Reusable GitHub Actions workflows for IDS microservices CI/CD. Multi-org support
 2. **Build once, deploy everywhere**: Same image promoted via tag manipulation
 3. **Registry-agnostic**: `docker-build` works with any registry (ECR, Docker Hub, GHCR, GCR)
 4. **OIDC authentication**: No static AWS credentials
-5. **Template-based config**: Placeholders `{{VAR}}` in `templates/`, rendered via `scripts/render.sh`
-6. **DRY**: Single unified `docker-build` action for tests and production builds
+5. **DRY**: Single unified `docker-build` action for tests and production builds
 
 ## Structure
 
 ```
-templates/              # Sources with {{placeholders}}
-├── .github/workflows/
-│   ├── ci.yml       # CI for PRs (tests + build validation)
-│   └── pipeline.yml # Full pipeline (tests + build + push + deploy)
-├── actions/
-│   ├── docker-build/   # Unified Docker build action
-│   ├── ecr-login/
-│   ├── compose-deploy/ # VM deploy via SSH + docker compose
-│   ├── ecs-deploy/
-│   └── maven-settings/
-└── scripts/
+.github/workflows/
+├── ci.yml              # CI for PRs (tests + build validation)
+├── pipeline.yml        # Full pipeline (tests + build + push + deploy)
+├── pipeline-compose.yml # Compose-focused pipeline
+├── pipeline-ecs.yml    # ECS-focused pipeline
+├── restart.yml         # Service restart (compose or ECS)
+└── azure-boards-sync.yml
 
-.github/workflows/      # Generated files
-actions/                # Generated files
+actions/
+├── docker-build/       # Unified Docker build action
+├── ecr-login/
+├── compose-deploy/     # VM deploy via SSH + docker compose
+├── compose-restart/    # VM restart via SSH (pull + down + up)
+├── ecs-deploy/
+├── ecs-restart/
+└── maven-settings/
+
 scripts/
-├── render.sh           # Generates from templates
-├── init-repo.sh        # Generated
-├── setup-secrets.sh    # Generated
+├── init-repo.sh        # Init workflows for consumer repos
+├── setup-secrets.sh    # Configure GitHub secrets
 └── protect-branch.sh   # Branch protection
-
-config.example.sh       # Config template
-config.local.sh         # Local config (gitignored)
 ```
 
 ## Shared Workflows
@@ -48,6 +46,7 @@ config.local.sh         # Local config (gitignored)
 |----------|---------|------------|
 | `ci.yml` | PR validation | `run-tests`, `build-validation` |
 | `pipeline.yml` | Full pipeline | `registry-type`, `repository`, `run-tests`, `build-push`, `deploy-env`, `deploy-type` |
+| `restart.yml` | Service restart | `deploy-type`, `service-name` |
 | `azure-boards-sync.yml` | Update Azure Boards work item state | `target-state`, `pr-title`, `pr-body` |
 
 ## Shared Actions
@@ -57,6 +56,7 @@ config.local.sh         # Local config (gitignored)
 | `docker-build` | Build & optionally push | ✅ Yes |
 | `ecr-login` | AWS ECR login via OIDC | ECR only |
 | `compose-deploy` | VM deploy via SSH + Docker Compose | ✅ Yes |
+| `compose-restart` | VM restart via SSH (pull + down + up) | ✅ Yes |
 | `ecs-deploy` | ECS Fargate deploy | AWS only |
 | `ecs-restart` | Restart ECS service | AWS only |
 | `maven-settings` | Prepare settings.xml | - |
@@ -64,22 +64,7 @@ config.local.sh         # Local config (gitignored)
 
 ## Development Workflow
 
-```bash
-# 1. Edit templates in templates/
-# 2. Render for target org
-./scripts/render.sh                    # Uses config.local.sh or config.example.sh
-./scripts/render.sh config.client.sh   # Uses specific config
-```
-
-## Placeholders
-
-| Placeholder | Example |
-|-------------|---------|
-| `{{ORG_NAME}}` | `ids-aws` |
-| `{{AWS_ACCOUNT_ID}}` | `857736876208` |
-| `{{AWS_REGION}}` | `eu-west-1` |
-| `{{AZURE_ORG}}` | `INNOVAWST` |
-| `{{AZURE_PROJECT}}` | `ZenYaa` |
+Edit files directly in `.github/workflows/` and `actions/`.
 
 ## Consumer Repo Workflows
 
