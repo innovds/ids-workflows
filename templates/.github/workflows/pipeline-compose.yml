@@ -75,6 +75,9 @@ on:
         required: false
       SSH_PRIVATE_KEY:
         required: false
+      BUILD_ARGS_SECRETS:
+        description: 'Secret build args (multiline KEY=VALUE, merged with build-args input)'
+        required: false
 
 permissions:
   id-token: write
@@ -95,13 +98,24 @@ jobs:
         with:
           settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
 
+      - name: Merge build args
+        id: build-args
+        shell: bash
+        run: |
+          {
+            echo "value<<EOF"
+            echo "${{ inputs.build-args }}"
+            echo "${{ secrets.BUILD_ARGS_SECRETS }}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Run tests
         if: inputs.run-tests
         uses: {{ORG_NAME}}/ids-workflows/actions/docker-build@main
         with:
           target: test
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
-          build-args: ${{ inputs.build-args }}
+          build-args: ${{ steps.build-args.outputs.value }}
 
       - name: Resolve image tag
         id: tag
@@ -115,12 +129,7 @@ jobs:
             SHA="sha-${GITHUB_SHA::7}"
             if [ -n "$PREFIX" ]; then
               echo "value=${PREFIX}-${SHA}" >> $GITHUB_OUTPUT
-              {
-                echo "extra<<EOF"
-                echo "latest"
-                echo "$PREFIX"
-                echo "EOF"
-              } >> $GITHUB_OUTPUT
+              echo "extra=${PREFIX}" >> $GITHUB_OUTPUT
             else
               echo "value=${SHA}" >> $GITHUB_OUTPUT
               echo "extra=latest" >> $GITHUB_OUTPUT
@@ -169,7 +178,7 @@ jobs:
           image-tag: ${{ steps.tag.outputs.value }}
           extra-tags: ${{ steps.tag.outputs.extra }}
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
-          build-args: ${{ inputs.build-args }}
+          build-args: ${{ steps.build-args.outputs.value }}
 
       - name: Deploy via Compose
         uses: {{ORG_NAME}}/ids-workflows/actions/compose-deploy@main

@@ -130,6 +130,9 @@ on:
         required: false
       SSH_PRIVATE_KEY:
         required: false
+      BUILD_ARGS_SECRETS:
+        description: 'Secret build args (multiline KEY=VALUE, merged with build-args input)'
+        required: false
 
     outputs:
       image-tag:
@@ -165,6 +168,17 @@ jobs:
         with:
           settings-base64: ${{ secrets.MAVEN_SETTINGS_XML }}
 
+      - name: Merge build args
+        id: build-args
+        shell: bash
+        run: |
+          {
+            echo "value<<EOF"
+            echo "${{ inputs.build-args }}"
+            echo "${{ secrets.BUILD_ARGS_SECRETS }}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Run tests
         if: inputs.run-tests
         uses: {{ORG_NAME}}/ids-workflows/actions/docker-build@main
@@ -172,7 +186,7 @@ jobs:
           target: test
           push: 'false'
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
-          build-args: ${{ inputs.build-args }}
+          build-args: ${{ steps.build-args.outputs.value }}
 
       - name: Generate tag
         if: inputs.build-push
@@ -183,12 +197,7 @@ jobs:
           if [ -n "$PREFIX" ]; then
             # With prefix: {prefix}-sha-xxx, latest, {prefix}
             echo "value=${PREFIX}-sha-$SHA" >> $GITHUB_OUTPUT
-            {
-              echo "extra<<EOF"
-              echo "latest"
-              echo "$PREFIX"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
+            echo "extra=${PREFIX}" >> $GITHUB_OUTPUT
           else
             # Without prefix: sha-xxx, latest
             echo "value=sha-$SHA" >> $GITHUB_OUTPUT
@@ -262,7 +271,7 @@ jobs:
           image-tag: ${{ steps.tag.outputs.value }}
           extra-tags: ${{ steps.tag.outputs.extra }}
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
-          build-args: ${{ inputs.build-args }}
+          build-args: ${{ steps.build-args.outputs.value }}
 
   deploy:
     name: Deploy ${{ inputs.deploy-env }}
