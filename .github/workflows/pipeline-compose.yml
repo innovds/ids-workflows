@@ -59,6 +59,10 @@ on:
         description: 'AWS Region (ECR only)'
         type: string
         default: ''
+      platforms:
+        description: 'Target platforms (e.g., linux/amd64,linux/arm64)'
+        type: string
+        default: 'linux/amd64,linux/arm64'
       deploy-env:
         description: 'Environment for GitHub protection rules (optional)'
         type: string
@@ -177,6 +181,7 @@ jobs:
           repository: ${{ steps.repo.outputs.name }}
           image-tag: ${{ steps.tag.outputs.value }}
           extra-tags: ${{ steps.tag.outputs.extra }}
+          platforms: ${{ inputs.platforms }}
           maven-settings-path: ${{ steps.maven.outputs.settings-path }}
           build-args: ${{ steps.build-args.outputs.value }}
 
