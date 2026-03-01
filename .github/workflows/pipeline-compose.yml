@@ -167,6 +167,8 @@ jobs:
           if [ -z "$REPO" ]; then
             if [ "${{ inputs.registry-type }}" = "ecr" ]; then
               REPO="app/${{ github.event.repository.name }}"
+            elif [ "${{ inputs.registry-type }}" = "ghcr" ]; then
+              REPO="${{ github.repository_owner }}/${{ github.event.repository.name }}"
             else
               REPO="${{ github.event.repository.name }}"
             fi
