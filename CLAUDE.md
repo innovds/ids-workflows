@@ -1,6 +1,12 @@
 # CLAUDE.md
 
+> Last updated: 2026-03-02
+
 This file provides guidance to Claude Code when working with this repository.
+
+## Critical Rules
+
+- **Keep this file up to date**: this file is loaded every conversation — outdated info means wrong decisions. After any structural change (new workflow, new action, renamed file), update this file immediately.
 
 ## Project Purpose
 
@@ -10,7 +16,7 @@ Reusable GitHub Actions workflows for IDS microservices CI/CD.
 
 1. **Docker-only builds**: No Java/Maven on runners, all builds inside Dockerfile
 2. **Build once, deploy everywhere**: Same image promoted via tag manipulation
-3. **Registry-agnostic**: `docker-build` works with any registry (ECR, Docker Hub, GHCR, GCR)
+3. **Registry-agnostic**: `docker-build` works with any registry (ECR, Docker Hub, GHCR, GCR, Nexus, ACR)
 4. **OIDC authentication**: No static AWS credentials
 5. **DRY**: Single unified `docker-build` action for tests and production builds
 
@@ -18,26 +24,34 @@ Reusable GitHub Actions workflows for IDS microservices CI/CD.
 
 ```
 .github/workflows/
-├── ci.yml              # CI for PRs (tests + build validation)
-├── pipeline.yml        # Full pipeline (tests + build + push + deploy)
-├── pipeline-compose.yml # Compose-focused pipeline
-├── pipeline-ecs.yml    # ECS-focused pipeline
-├── restart.yml         # Service restart (compose or ECS)
-└── azure-boards-sync.yml
+├── ci.yml                # CI for PRs (tests + build validation)
+├── pipeline.yml          # Full pipeline (tests + build + push + deploy)
+├── pipeline-compose.yml  # Compose-focused pipeline (VM deploy via SSH)
+├── pipeline-ecs.yml      # ECS Fargate-focused pipeline
+├── restart.yml           # Service restart (compose or ECS)
+├── sonar.yml             # SonarQube analysis (Java)
+├── sonar-ts.yml          # SonarQube analysis (TypeScript)
+├── dockerhub-image.yml   # Docker Hub image build & push
+└── azure-boards-sync.yml # Azure Boards work item sync
 
 actions/
-├── docker-build/       # Unified Docker build action
-├── ecr-login/
-├── compose-deploy/     # VM deploy via SSH + docker compose
-├── compose-restart/    # VM restart via SSH (pull + down + up)
-├── ecs-deploy/
-├── ecs-restart/
-└── maven-settings/
+├── docker-build/         # Unified Docker build action
+├── registry-login/       # Multi-registry login (ECR, DockerHub, GHCR, GitLab, Nexus, generic)
+├── ecr-login/            # AWS ECR login via OIDC
+├── compose-deploy/       # VM deploy via SSH + docker compose
+├── compose-restart/      # VM restart via SSH (pull + down + up)
+├── ecs-deploy/           # ECS Fargate deploy
+├── ecs-restart/          # Restart ECS service
+├── maven-settings/       # Prepare settings.xml
+└── azure-boards-update/  # Update Azure Boards work item state
 
 scripts/
-├── init-repo.sh        # Init workflows for consumer repos
-├── setup-secrets.sh    # Configure GitHub secrets
-└── protect-branch.sh   # Branch protection
+├── init-repo.sh          # Init workflows for consumer repos
+├── setup-secrets.sh      # Configure GitHub secrets
+└── protect-branch.sh     # Branch protection
+
+docs/
+└── aws-oidc-setup.md     # AWS OIDC setup guide
 ```
 
 ## Shared Workflows
@@ -45,18 +59,24 @@ scripts/
 | Workflow | Purpose | Key Inputs |
 |----------|---------|------------|
 | `ci.yml` | PR validation | `run-tests`, `build-validation` |
-| `pipeline.yml` | Full pipeline | `registry-type`, `repository`, `run-tests`, `build-push`, `deploy-env`, `deploy-type` |
+| `pipeline.yml` | Full pipeline (registry-agnostic) | `registry-type`, `repository`, `run-tests`, `build-push`, `deploy-env`, `deploy-type` |
+| `pipeline-compose.yml` | Compose-focused pipeline (VM deploy) | `run-tests`, `build-image`, `deploy-env` |
+| `pipeline-ecs.yml` | ECS Fargate-focused pipeline | `run-tests`, `build-image`, `deploy-env` |
 | `restart.yml` | Service restart | `deploy-type`, `service-name` |
+| `sonar.yml` | SonarQube analysis (Java) | `project-key` |
+| `sonar-ts.yml` | SonarQube analysis (TypeScript) | `project-key` |
+| `dockerhub-image.yml` | Docker Hub image build & push | `context`, `image` |
 | `azure-boards-sync.yml` | Update Azure Boards work item state | `target-state`, `pr-title`, `pr-body` |
 
 ## Shared Actions
 
 | Action | Purpose | Registry-agnostic |
 |--------|---------|-------------------|
-| `docker-build` | Build & optionally push | ✅ Yes |
+| `docker-build` | Build & optionally push | Yes |
+| `registry-login` | Multi-registry login (ECR, DockerHub, GHCR, GitLab, Nexus, generic) | Yes |
 | `ecr-login` | AWS ECR login via OIDC | ECR only |
-| `compose-deploy` | VM deploy via SSH + Docker Compose | ✅ Yes |
-| `compose-restart` | VM restart via SSH (pull + down + up) | ✅ Yes |
+| `compose-deploy` | VM deploy via SSH + Docker Compose | Yes |
+| `compose-restart` | VM restart via SSH (pull + down + up) | Yes |
 | `ecs-deploy` | ECS Fargate deploy | AWS only |
 | `ecs-restart` | Restart ECS service | AWS only |
 | `maven-settings` | Prepare settings.xml | - |

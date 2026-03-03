@@ -514,6 +514,9 @@ ids-workflows/
 │   ├── pipeline-compose.yml   # Pipeline Compose
 │   ├── pipeline-ecs.yml       # Pipeline ECS
 │   ├── restart.yml            # Restart service (compose ou ECS)
+│   ├── sonar.yml              # SonarQube analysis (Java)
+│   ├── sonar-ts.yml           # SonarQube analysis (TypeScript)
+│   ├── dockerhub-image.yml    # Docker Hub image build & push
 │   └── azure-boards-sync.yml  # Sync PR events → Azure Boards
 ├── actions/
 │   ├── azure-boards-update/   # Update Azure Boards work item
@@ -523,7 +526,8 @@ ids-workflows/
 │   ├── ecr-login/             # Login ECR OIDC
 │   ├── ecs-deploy/            # Deploy ECS Fargate
 │   ├── ecs-restart/           # Restart ECS service
-│   └── maven-settings/        # Prépare Maven
+│   ├── maven-settings/        # Prépare Maven
+│   └── registry-login/        # Multi-registry login (ECR, DockerHub, GHCR, GitLab, Nexus)
 ├── scripts/
 │   ├── init-repo.sh           # Init workflows pour MS
 │   ├── setup-secrets.sh       # Configure secrets GitHub
