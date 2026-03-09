@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> Last updated: 2026-03-02
+> Last updated: 2026-03-09
 
 This file provides guidance to Claude Code when working with this repository.
 
@@ -46,9 +46,10 @@ actions/
 └── azure-boards-update/  # Update Azure Boards work item state
 
 scripts/
-├── init-repo.sh          # Init workflows for consumer repos
-├── setup-secrets.sh      # Configure GitHub secrets
-└── protect-branch.sh     # Branch protection
+├── init-repo.sh               # Init workflows for consumer repos
+├── setup-secrets.sh           # Configure GitHub secrets (ECR/AWS)
+├── setup-compose-secrets.sh   # Configure secrets for Compose deploys (multi-registry: nexus, dockerhub, ghcr, ecr, generic)
+└── protect-branch.sh          # Branch protection
 
 docs/
 └── aws-oidc-setup.md     # AWS OIDC setup guide
