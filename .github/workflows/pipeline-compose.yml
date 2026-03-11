@@ -67,6 +67,10 @@ on:
         description: 'Environment for GitHub protection rules (optional)'
         type: string
         default: ''
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       AWS_ROLE_TO_ASSUME:
@@ -91,7 +95,7 @@ permissions:
 jobs:
   pipeline:
     name: Pipeline
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     environment: ${{ inputs.deploy-env || null }}
 
     steps:
