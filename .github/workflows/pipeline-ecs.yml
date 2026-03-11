@@ -23,6 +23,10 @@ on:
         description: 'Target environment (int, stg, prod)'
         type: string
         default: 'int'
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
       registry-type:
         description: 'Registry type: ecr | dockerhub | ghcr | gitlab | nexus | generic'
         type: string
@@ -84,7 +88,7 @@ permissions:
 jobs:
   pipeline:
     name: Pipeline
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     environment: ${{ inputs.deploy-env }}
 
     steps:

@@ -15,6 +15,10 @@ on:
         description: 'Image tag (e.g. 21-jre)'
         type: string
         required: true
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -27,7 +31,7 @@ permissions:
 jobs:
   build:
     name: Build & Push
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 

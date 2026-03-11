@@ -18,6 +18,10 @@ on:
         required: false
         type: boolean
         default: true
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       MAVEN_SETTINGS_XML:
@@ -30,7 +34,7 @@ permissions:
 jobs:
   ci:
     name: CI
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4
 

@@ -44,6 +44,10 @@ on:
         required: false
         type: string
         default: ''
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       SSH_PRIVATE_KEY:
@@ -58,7 +62,7 @@ permissions:
 jobs:
   restart:
     name: Restart ${{ inputs.service-name || github.event.repository.name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     steps:
       - name: Resolve service name

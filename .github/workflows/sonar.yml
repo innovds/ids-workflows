@@ -43,6 +43,10 @@ on:
         required: false
         type: boolean
         default: false
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       SONAR_TOKEN:
@@ -56,7 +60,7 @@ permissions:
 jobs:
   sonar:
     name: SonarQube Analysis
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     steps:
       - name: Checkout

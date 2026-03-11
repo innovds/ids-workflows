@@ -118,6 +118,10 @@ on:
         required: false
         type: string
         default: 'DOCKER_IMAGE'
+      runner:
+        description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       AWS_ROLE_TO_ASSUME:
@@ -147,7 +151,7 @@ jobs:
   build:
     name: Build
     if: inputs.run-tests || inputs.build-push
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       image-tag: ${{ steps.tag.outputs.value }}
       service-name: ${{ steps.service.outputs.name }}
@@ -277,7 +281,7 @@ jobs:
     name: Deploy ${{ inputs.deploy-env }}
     needs: [build]
     if: always() && inputs.deploy-env != '' && (needs.build.result == 'success' || needs.build.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     environment: ${{ inputs.deploy-env }}
 
     steps:
