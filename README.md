@@ -89,13 +89,17 @@ flowchart LR
 
 ## Quick Start
 
-```bash
-# 1. Initialiser les workflows pour un microservice
-./scripts/init-repo.sh /path/to/my-service my-service
+Repo initialization (workflows + secrets) is now automated via Ansible:
 
-# 2. Configurer les secrets GitHub
-./scripts/setup-secrets.sh --repo your-org/my-service --aws-role-arn arn:aws:iam::123456:role/github-actions
+```bash
+# Initialize a single repo (workflows + secrets)
+ansible-playbook playbooks/github-init.yml -e "filter_repo=my-service" -C ids-deploy/
+
+# Initialize all repos for a project group
+ansible-playbook playbooks/github-init.yml -e "filter_tag=ellarea" -C ids-deploy/
 ```
+
+See `ids-deploy/CLAUDE.md` for full usage.
 
 ---
 
@@ -528,10 +532,6 @@ ids-workflows/
 │   ├── ecs-restart/           # Restart ECS service
 │   ├── maven-settings/        # Prépare Maven
 │   └── registry-login/        # Multi-registry login (ECR, DockerHub, GHCR, GitLab, Nexus)
-├── scripts/
-│   ├── init-repo.sh           # Init workflows pour MS
-│   ├── setup-secrets.sh       # Configure secrets GitHub
-│   └── protect-branch.sh      # Protection branche main
 └── docs/
     └── aws-oidc-setup.md      # Guide config OIDC AWS
 ```
