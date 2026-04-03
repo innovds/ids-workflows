@@ -67,6 +67,10 @@ on:
         description: 'Environment for GitHub protection rules (optional)'
         type: string
         default: ''
+      service-name:
+        description: 'Service name for deploy directory (default: repo name)'
+        type: string
+        default: ''
       runner:
         description: 'Runner label (e.g., ubuntu-latest or self-hosted)'
         type: string
@@ -197,7 +201,7 @@ jobs:
           ssh-host: ${{ inputs.ssh-host }}
           ssh-user: ${{ inputs.ssh-user }}
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          service-name: ${{ github.event.repository.name }}
+          service-name: ${{ inputs.service-name || github.event.repository.name }}
           image-uri: ${{ steps.registry.outputs.registry }}/${{ steps.repo.outputs.name }}:${{ steps.tag.outputs.value }}
           compose-file: ${{ inputs.compose-file }}
           deploy-path: ${{ inputs.deploy-path }}
